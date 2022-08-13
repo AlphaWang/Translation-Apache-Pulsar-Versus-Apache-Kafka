@@ -42,11 +42,13 @@ Kafka Broker 是有状态的。每个 Broker 都存储了相关主题的完整�
 
 ## Pulsar
 
-In the Pulsar architecture, there are three main components: ZooKeeper, Pulsar broker, and Apache BookKeeper bookie, as shown in [Figure 2]. As with Kafka, ZooKeeper provides service discovery, leadership elections, and metadata storage. Unlike Kafka, Pulsar separates the message serving function from the message storage function using Pulsar broker and the BookKeeper bookie component.
+Pulsar 架构中主要有三个组件：ZooKeeper、Pulsar Broker 和 Apache BookKeeper Bookie，如图 2 所示。与 Kafka 一样，ZooKeeper 提供服务发现、领导者选举和元数据存储。与 Kafka 不同的是，Pulsar 通过 Broker 和 BookKeeper bookie 组件分离了消息处理功能与消息存储功能。
+
+
 
 ![img](../img/apak_0102.png)
 
-*Figure 2. Pulsar architecture*
+*Figure 2. Pulsar 架构图*
 
 The Pulsar broker is responsible for the serving of messages. The storing of messages is handled by the BookKeeper bookies. It is a layered architecture where the Pulsar broker handles serving the messages between the producers and consumers but hands off responsibility for storing the messages to the BookKeeper layer.
 
