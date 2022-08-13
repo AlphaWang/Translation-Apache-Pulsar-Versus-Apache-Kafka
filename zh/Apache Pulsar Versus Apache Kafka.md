@@ -42,117 +42,151 @@ Kafka Broker 是有状态的。每个 Broker 都存储了相关主题的完整�
 
 ## Pulsar
 
-Pulsar 架构中主要有三个组件：ZooKeeper、Pulsar Broker 和 Apache BookKeeper Bookie，如图 2 所示。与 Kafka 一样，ZooKeeper 提供服务发现、领导者选举和元数据存储。与 Kafka 不同的是，Pulsar 通过 Broker 和 BookKeeper bookie 组件分离了消息处理功能与消息存储功能。
+Pulsar 架构中主要有三个组件：ZooKeeper、Pulsar Broker 和 Apache BookKeeper Bookie，如图 2 所示。与 Kafka 一样，ZooKeeper 提供服务发现、领导者选举和元数据存储。与 Kafka 不同的是，Pulsar 通过 Broker 和 BookKeeper Bookie 组件分离了消息处理功能与消息存储功能。
 
 
 
 ![img](../img/apak_0102.png)
 
-*Figure 2. Pulsar 架构图*
+*图 2. Pulsar 架构图*
 
-The Pulsar broker is responsible for the serving of messages. The storing of messages is handled by the BookKeeper bookies. It is a layered architecture where the Pulsar broker handles serving the messages between the producers and consumers but hands off responsibility for storing the messages to the BookKeeper layer.
+Pulsar Broker 负责消息处理，而 BookKeeper Bookie 负责消息存储。这是一种分层架构，Pulsar Broker 处理生产者和消费者之间的消息处理，而将消息存储放到 BookKeeper 层。
 
-Because of this layered architecture, the Pulsar broker (unlike Kafka) is stateless. This means that any broker can take over for any other failed broker. It also means that a new broker can be brought online and it can immediately begin serving messages between producers and consumers. To make sure the load between brokers is balanced, the Pulsar broker has a built-in load balancer. It continually monitors the CPU, memory, and network usage of each broker and will move responsibility for topics between brokers in order to maintain a balanced load. When it does this, there is a small increase in latency, but the end result is a cluster with a balanced load.
+得益于这种分层架构，Pulsar Broker 是无状态的，这与 Kafka 不同。这意味着任何 Broker 均可接管失效的 Broker。也意味着新的 Broker 上线后可以立即开始在生产者和消费者之间处理消息。为了确保 Broker 之间的负载均衡，Pulsar Broker 内置了一套负载均衡器，不断监视每个 Broker 的 CPU、内存以及网络使用情况，并据此在 Broker 之间转移主题归属以保持负载均衡。这个过程会让 Latency 小幅增加，但最终能让集群的负载达到均衡。
 
-The BookKeeper layer is the data storage layer and is, of course, stateful. A messaging system that provides message delivery guarantees must retain messages for consumers, so messages must be persistently stored somewhere. BookKeeper was designed to enable the building of a distributed log across multiple servers. It is an independent Apache project and is used in a variety of applications, not just Pulsar.
+BookKeeper 作为数据存储层，当然是有状态的。提供可靠消息投递保证的消息系统必须为消费者保留消息，所以消息必须持久化存储到某个地方。BookKeeper 旨在跨服务器构建分布式日志，它是一个独立的 Apache 项目，用于多种应用中，而非仅仅是 Puslar 中。 
 
-Because BookKeeper breaks the log into segments called ledgers, it is easy to maintain an even balance between the BookKeeper bookie nodes. If a bookie node fails, some of the topics will become under replicated. In this case, BookKeeper will automatically start copying ledgers from replicas stored on other bookies to restore the replication factor. It does not have to wait for the failed bookie to be restored or another bookie to come online. If you add a new bookie, it will immediately start storing new ledgers from existing topics. There is no need to move topics or partitions to the new server because no one bookie owns the topic or partition.
+BookKeeper 将日志切分成一个一个被称为 Ledger 的分片，这样就很容易在 BookKeeper Bookie 节点之间保持均衡。如果 Bookie 节点失效，一些主题会变成小于复制因子（Under Replicated）。发生这种情况 BookKeeper 会自动从存储在其他 Bookie 上的副本中复制 Ledger，而无需等待失效的 Bookie 恢复或等待其他 Bookie 上线。如果添加一个新 Bookie，则能立即开始存储来自已有主题的新 Ledger。由于主题或分区并不从属于某个 Bookie，所以故障恢复过程无需将主题或分区移动到新服务器。
 
-## Replication Model
 
-For durability of messages, both Kafka and Pulsar store multiple copies, or replicas, of each message. However, they differ in the replication model they use.
 
-Kafka has a leader–follower replication model. One of the Kafka brokers is elected the leader for a topic (technically a topic partition—more on that later). All messages are initially written to the leader, and the followers read and replicate the messages from the leader, as shown in [Figure 3]. Unless there is a failure of one of the Kafka brokers, this relationship is static. A message is written to the same set of leader and follower brokers. Introducing a new broker doesn’t change the relationship for existing topics.
+## 复制模型
+
+为了实现消息持久性，Kafka 和 Pulsar 都对每个消息存储多个拷贝或副本。但是他们各自使用了不同的复制模型。
+
+Kafka 使用的是 Leader-Follower 复制模型。对每个主题（确切说是主题分区，稍后我们会详细解释）都会选出一个 Broker 作为 Leader。所有消息最初都写入到 Leader，然后 Follower 从 Leader 读取并复制消息，如图 3 所示。这种关系是静态的，除非发生 Broker 失效。一个消息被写入同一组 Leader 和 Follower Broker。引入新的 Broker 并不会改变现有主题的关系。
+
+
 
 ![img](../img/apak_0103.png)
 
-*Figure 3. Kafka leader–follower replication*
+*图 3. Kafka leader–follower 复制模型*
 
-Pulsar uses a quorum–vote replication model. Multiple copies of the message (write quorum) are written in parallel. Once some number of copies have been confirmed stored, then the message is acknowledged (ack quorum). Unlike the leader–follower model, Pulsar can spread (or stripe) the copies over a set of storage nodes (ensemble), which can improve the read and write performance. This also means that as soon as a new node is added it will become part of the set available for spreading the messages across.
+Pulsar 使用的则是法定人数投票复制模型（quorum-vote）。Pulsar 并行写入消息的多个副本（Write Quorum）。一旦一定数量的副本被确认写入成功，则该消息被确认（Ack Quorum）。与 Leader-Follower 模型不同，Pulsar 将副本分散（或称为条带化写入）到一组存储节点（Ensemble）中，这能改善读写性能。这也意味着新的节点添加成功后，即可立即服务读写。
 
 In [Figure 4], the message is sent to the broker. It is then broken into segments and sent to multiple bookie nodes. All the bookie nodes store the segments and acknowledge back to the broker. Once the broker has received enough acknowledgements for the segments from enough bookies, it will acknowledge the message back to the producer.
 
+如图 4 所示，消息被发往 Broker，然后被切分成分片（Segment）并写入多个 Bookie 节点。这些 Bookie 节点存储分片并发送确认给 Broker。一旦 Broker 从足够多的 Bookie 节点收到足够多的分片确认，则向生产者发送消息确认。
+
 ![img](../img/apak_0104.png)
 
-*Figure 4. Pulsar quorum–vote replication*
+*图 4. Pulsar quorum–vote 复制模型*
 
-Because brokers are stateless, the storage layer is distributed, and the quorum–vote replication model is used, dealing with failed servers is easier in Pulsar than in Kafka. You just replace the failed server, and Pulsar recovers automatically. Adding new capacity to the cluster is also easier. It is just a matter of simple horizontal scaling.
 
-And because the serving and storage layers are separated, you can scale them independently. If the serving requirements are high and storage requirements are low, you can just add more Pulsar brokers to the cluster. If the storage requirements are high but the serving requirements are low, you can just add more BookKeeper bookies. This independent scalability means you can better optimize your cluster resources, avoiding paying for extra storage when you just need extra serving power and vice versa.
 
-# Pub–Sub Messaging: An Overview
+由于 Broker 层是无状态的、存储层是分布式的、并且使用了法定人数投票复制模型（quorum-vote），所以与 Kafka 相比 Puslar 能更容易地处理服务器失效。只需替换掉失效的服务器，Pulsar 即可自动恢复。增加新容量也更容易，只需简单的水平扩展即可。
 
-The fundamental messaging pattern supported by both Kafka and Pulsar is pub–sub, or publish–subscribe. In pub–sub messaging, the senders and receivers of messages are decoupled, so that they have no knowledge of each other. The sender (or producer) publishes a message to a topic without knowledge of who will receive the message. The receiver (or consumer) subscribes to a topic that it wants to receive messages for. The sender and receiver are not connected and can change over time.
+而且由于计算层和存储层是分离的，所以你可以独立地扩展它们。如果对计算要求较高而对存储要求较低，那么在集群中加入更多的 Puslar Broker 即可扩展计算层。如果存储要求很高而计算要求很低，那么加入更多 BookKeeper Bookie 即可扩展存储层。这种独立的可扩展性意味着你可以更好地优化集群资源，避免在仅需要扩展计算能力时不得不浪费额外的存储，反之亦然。
+
+
+
+# Pub–Sub 消息系统概览
+
+Kafka 和 Pulsar 的底层消息模式都是发布订阅，又称 pub-sub。在 pub-sub系统中，消息的发送方和接收方是解耦的，因此彼此透明。发送方（生产者）将消息发送到一个主题，而无需知道谁将接收到这些消息。接收方（消费者）订阅要接收消息的主题。发送方和接收方不互相连接，且随时间推移可能变化。
+
+
 
 ![img](../img/apak_0105.png)
 
-*Figure 5. Pub–sub messaging pattern—each subscriber gets a copy of the messages sent by the producer*
+*图 5. Pub–sub 消息模式：每个订阅者都能收到生产者发送的一条消息拷贝*
 
-A key feature of the pub–sub message pattern is that there can be multiple publishers and subscribers on a single topic. As shown in [Figure 5], many publishing applications can be sending messages to a single topic, and many different subscribing applications can be receiving those messages. Importantly, each subscribing application receives its own copy of the message. So, if a single message is published and there are 10 subscribers, 10 copies of that message are sent, one for each subscriber.
 
-The pub–sub messaging pattern is not new and can be achieved using a wide variety of message brokers: RabbitMQ, ActiveMQ, IBM MQ—the list is long. What differentiates Kafka from these traditional message brokers is its ability to scale to support high volumes of messages in the pub–sub pattern while maintaining consistent per-message latency.
 
-Like Kafka, Pulsar supports the pub–sub messaging pattern and can support high volumes of messages with consistent latency. Kafka uses consumer groups to enable multiple consumers to receive a copy of a single message. For each consumer group associated with a topic, Kafka delivers one message to the group. Pulsar achieves the same behavior using a subscription. For each subscription associated with a topic, Pulsar delivers one message to the subscription.
+Pub-sub 消息模式的一个关键功能是单个主题上可能有多个生产者与订阅者。如图 5 所示，多个发布应用可以发送消息到一个主题，多个订阅应用可以接收这些消息。重要的是，每个订阅应用都会收到自己的消息拷贝。所以如果发布了一条消息并且有 10 个订阅者，那么则会发送 10 条消息拷贝，每个订阅者收到一条消息拷贝。
 
-## Log Abstraction
+Pub-sub 消息模式并不是什么新鲜事物，且可由多种消息系统实现：RabbitMQ、ActiveMQ、IBM MQ，数不胜数。Kafka 与这些传统消息系统的区别在于，它有能力扩展到支持大量消息，同时保持一致的消息延迟。
 
-The other main difference between Kafka and traditional message brokers is its use of the log as its primary abstraction for dealing with messages. Producers write to a topic, which is a log, and consumers independently read from the log. However, unlike traditional message brokers, messages once read are not removed from the log. They are persistent in the log for a configurable amount of time. Instead of consumers acknowledging a message to the broker, which then deletes it, a Kafka consumer indicates how much of the log it has read by committing an offset value. This action does not delete the message from the log or modify it in any way. The log is immutable.
+与 Kafka 类似，Pulsar 也支持 pub-sub 消息模式，且也能支持大量消息且具有一致延迟。Kafka 使用消费者组来实现多个消费者接收同一消息的不同拷贝。Kafka 会向关联到主题的每个消费者组发送一条消息。Pulsar 使用订阅（Subscription）来实现相同的行为，Pulsar 向关联到主题的每个订阅发送一条消息。 
+
+
+
+## 日志抽象
+
+Kafka 与传统消息系统的另一个主要区别是其将日志作为处理消息的主要抽象。生产者写入主题，即写入日志；而消费者独立地读取日志。然而与传统消息系统不同，消息被读取后并不会从日志中删除。消息被持久化到日志中直至配置的时间到期。Kafka 消费者确认消息后，并不会删除消息，而是提交一个偏移量值来表示它已读取了多少日志。此操作不会从日志中删除消息或以任何方式修改日志。总之，日志是不可变的。
+
+
 
 To prevent the log from becoming infinitely long, messages in the log expire (typically) after a period of time (retention period). Expired messages are removed from the log. In Kafka, the default retention period is seven days. [Figure 6] illustrates how published messages are appended to the log, while consumers read at different offsets. In time, messages in the log expire and are removed.
 
+为了防止日志变得无限长，日志中的消息在一段时间（保留期）后会过期。过期的消息会从日志中删除。Kafka 默认的保留期是七天。图 6 展示了发布的消息是如何附加到日志中，而消费者以不同的偏移量读取它。日志中的消息到期后会过期并被删除。
+
 ![img](../img/apak_0106.png)
 
-*Figure 6. The log abstraction*
+*图 6. 日志抽象*
 
-## Message Replay
+## 消息重放
 
-This use of a log abstraction allows for multiple consumers to read from a topic independently. It also enables message reply. Since a consumer is just reading from the log and committing its place (offset) in the log, it is easy to have a consumer go back in time to messages it has already read by moving its offset to an earlier position. Being able to replay messages has many advantages. For example, it allows an application with bugs to be repaired and then will replay previously consumed messages to correct its state. It is also useful to replay messages when testing applications or developing new applications.
+利用日志抽象可以允许多个消费者独立地读取同一个主题。同时还能支持消息重放。由于消费者只是从日志中读取并提交日志偏移量，因此只要将偏移量移动到较早位置就能很容易地让消费者重放已消费过的消息。支持消息重放有很多优势。例如，有 bug 的应用程序修复后可以重放之前消费过的消息以纠正其状态。在测试应用程序或开发新应用程序时，消息重放也很有用。
 
-Like Kafka, Pulsar uses a log abstraction for its topics, but with a different implementation (more on that later). This means that it also supports message replay like Kafka does. With Pulsar, each subscription you create has a cursor that tracks where the subscription is in the topic log. You can create a subscription with the cursor starting at the earliest or latest message in a topic. You can rewind the subscription cursor to a specific message or back a certain amount of time (for example, 24 hours).
+与 Kafka 类似，Pulsar 也使用日志来抽象其主题，只不过具体实现有所不同。这意味着 Puslar 也能支持消息重放。在 Puslar 中，创建的每个订阅都有一个游标来跟踪其在主题日志中的消费位置。创建订阅的时候可以指定游标从主题的最早或最新消息开始。你可以将订阅游标倒回到特定消息或特定时间（例如倒回 24 小时）。
 
-# Traditional Messaging
 
-So far, Kafka and Pulsar have many similarities. They both are pub–sub messaging systems that can handle high messaging volumes. They use a log abstraction for topics and support the replay of messages. Where they differ is in their support of the traditional messaging model.
 
-In the traditional messaging model, the messaging system takes responsibility for ensuring a message is delivered to the consumer. It does this by keeping track of whether or not the consumer has acknowledged a message and will periodically redeliver that message to the consumer until it has been acknowledged. Once the message has been acknowledged, it is deleted (or marked for future deletion). An unacknowledged message is never deleted. It will persist forever. An acknowledged message is never sent to a consumer.
+# 传统消息模型
 
-Pulsar fully supports this model using subscriptions. Because of this capability, Pulsar is able to support additional messaging patterns that focus on how the message is consumed.
+到目前为止，我们看到 Kafka 与 Pulsar 有许多相似之处。他们都是能处理大量消息的 pub-sub 消息系统，都使用日志来抽象主题，并支持消息回放。他们不同的地方是对传统消息模型的支持有所不同。
 
-# Queues and Competing Consumers
+在传统消息模型中，消息系统负责确保消息被投递给消费者。消息系统会跟踪消费者是否已经确认消息，并周期性地将未被确认的消息重新投递给消费者，直至被确认为止。一旦消息被确认，即可被删除（或标记为将来删除）。而未被确认的消息永远不会被删除，它将永远存在。而已确认的消息永远不会再发送给消费者。
 
-The first pattern we are going to look at is the traditional queue. This model is most interesting when the messages on the queue represent some work to be done (work queue). You can have a single consumer read the messages off the queue and do that work, but it often makes sense to distribute the work among multiple consumers. This is called the competing consumers pattern and is shown in [Figure 7].
+Pulsar 利用订阅充分支持上述模型。 由于这种能力，Puslar 能够支持额外的消息模型，专注于消息如何被消费。
 
-In the competing consumers pattern, queues are used to store messages that take a long time to process—for example, transcoding a video. A message is published into a queue and a consumer reads that message and processes it. Once the message is processed, the consumer sends an acknowledgment and the message is removed from the queue. With a single consumer, all the messages in the queue that need to be worked on are blocked until the message is processed and acknowledged.
+
+
+# 队列与竞争消费者
+
+首先我们来看传统队列模式。这种模型常用于队列中的消息代表一系列将要完成的工作时（工作队列）。你可以使用单个消费者从队列中读取消息并执行工作，但更常见的做法是在多个消费者中分配工作。这种模式被称为竞争消费者模式，如图 7 所示。
+
+在竞争消费者模式中，队列用于存储需要很长时间来处理的消息，例如转换视频。一条消息被发布到队列中后，被消费者读取并处理。一旦消息被处理，消费者即发送确认，然后消息会从队列中删除。如果是单个消费者，则队列中的所有消息会被阻塞，直到消息被处理并确认。
+
+
 
 ![img](../img/apak_0107.png)
 
-*Figure 7. Competing consumers—each message is processed once by one of the consumers*
+*图 7. 竞争消费者：每条消息被一个消费者处理一次*
 
-To improve the flow and keep the queue from getting backed up, you add multiple consumers to the queue. Now, multiple consumers “compete” to take messages from the queue and process them. With two consumers in our video transcoding example, the system can process twice as many videos in the same amount of time. If that is not fast enough, we can add more consumers to increase the throughput.
 
-To be most effective, a work queue should always distribute messages to consumers that are able to perform work on the messages in the queue. If a consumer is available to process a message, the queue should send it that message.
+
+为了改善整个流程并保持队列不被填满，你可以往队列中添加多个消费者。然后多个消费者会“竞争”从队列中获取消息并处理它们。如果上述视频转换的例子中我们有两个消费者，则相同时间内能处理的视频量会增加到两倍。如果这还不够快，我们可以添加更多消费者来提高吞吐量。
+
+为了更有效，工作队列需要始终将消息分发给那些有能力处理队列消息的消费者。如果消费者有能力处理消息，则队列就将消息发给它。
+
+
 
 ## Kafka
 
-Kafka implements the competing consumers pattern using consumer groups and multiple partitions. In Kafka, topics consist of one or more partitions. When messages are published they are distributed to the partitions of the topic in a round-robin manner or by a key in the message. Consumer groups read from the partitions of a topic.
+Kafka 使用消费者组和多分区实现竞争消费者模式。Kafka 主题由一个或多个分区组成。消息被发布后通过 round-robin 或者消息 key 分布到主题的分区中，随后被消费者组从主题分区中读取。
 
-Importantly, in Kafka a partition can only be consumed by one consumer at a time. To get competing consumers to work, there needs to be a partition for each consumer. If there are more consumers than partitions, the extra consumers will be idle. For example, if you have a topic with two partitions, you can have up to two active consumers in the consumer group. If you add a third consumer to the group, it won’t have a partition to read from, so it won’t be competing for the work (messages) on the queue.
+需要注意的是，Kafka 的一个分区一次只能被一个消费者消费。要实现竞争消费者模式，则每个消费者要有对应的分区。如果消费者多于分区，则多出来的消费者就会被闲置。举个例子，你的主题有两个分区，则消费者组中最多有两个活跃消费者。如果增加第三个消费者，则该消费者没有分区可以读取，所以不会参与从队列中竞争工作（消息）。
 
-This means you need to have an idea how many competing consumers you will need when you create the topic. You can increase the number of partitions on a topic, but this is a fairly significant change, especially if you are assigning partitions based on keys. In addition to the relationship between consumers and partitions in Kafka, adding a new consumer to a consumer group causes a rebalance of all the consumers on the topic. This rebalancing causes a pause in message delivery for all consumers.
+这意味着在创建主题时就需要明确有多少竞争消费者。当然你可以增加主题分区数，但这是相当重的改动，尤其当根据 key 分配分区时。除了 Kafka 消费者与主题的对应关系外，往消费者组中添加消费者会重平衡该主题的所有消费者，这种重平衡会导致对所有消费者的消息投递都暂停掉。
 
-So Kafka does support the competing consumers messaging pattern, but you need to manage the number of partitions on a topic carefully to make sure that when adding a new consumer that consumer will actually process messages. Also, unlike a traditional message broker, Kafka does not periodically redeliver messages so that they can be processed again. If you want a message retry mechanism, you have to implement it in your application.
+所以说 Kafka 确实支持竞争消费者消息模式，但是需要你仔细管理主题的分区数，确保添加新消费者时能真的处理消息。另外，与传统消息系统不同，Kafka 不会周期性地重新投递消息以便可以再次处理这些消息。如果想要有消息重试机制，你需要自己实现。
 
-Kafka does have an advantage over traditional brokers in this area. One of the downsides to the competing consumers pattern is that messages can be processed out of order. Because you have multiple consumers competing to consume messages that may be working at different rates, it is very likely that messages will be processed out of order. If the message represents a unit of independent work, this is not an issue. But if the message represents an event like a financial transaction, order matters.
+Kafka 确实比传统消息系统有个优势。竞争消费者模式的一个弊端是消息可能被乱序处理。因为竞争消费消息的多个消费者可能处理速率不同，很有可能消息会乱序处理。如果消息代表独立的工作，那么这不是什么问题。但如果消息代表像金融交易这样的事件，那有序性就很重要了。
 
-Because of its use of partitions and the rule that only one consumer can consume from a partition at a time, Kafka is able to guarantee in-order delivery of messages that have the same key with competing consumers. If messages are routed to partitions by key, then the messages in each partition are in publishing order for that key. A consumer can consume off that partition getting the messages in order. This allows you to scale out consumers for parallel processing—with some careful planning—and maintain message order.
+由于 Kafka 分区一次只能被一个消费者消费，所以 Kafka 可以在竞争消费者模式下保证相同 key 的消息被顺序投递。如果消息是按照 key 路由到分区，则每个分区中的消息是按照发布的顺序存储的。消费者可以消费该分区并按顺序获取消息。这使得你可以扩展消费者以并行处理并保持消息顺序，当然这一切都需要仔细的规划才行。
+
+
 
 ## Pulsar
 
-In Pulsar, the competing consumers pattern is easy to implement. You just create a shared subscription on a topic. Consumers then connect to the topic using this shared subscription. Messages are consumed in a round-robin fashion by however many consumers are connected to that subscription. Consumers coming and going doesn’t trigger rebalancing like it does in Kafka. When a new consumer connects it starts participating in the round-robin receipt of messages. This is because unlike Kafka, Pulsar doesn’t use partitions to distribute messages between consumers. This is all controlled by the Pulsar subscription. Pulsar does support partitions, which are discussed later, but message consumption is primarily controlled by a subscription, not a partition.
+Pulsar 中的竞争消费者模式就很容易实现了，只需在主题上创建共享订阅即可。之后消费者使用此共享订阅连接到主题，消息以 round-robin 方式被连接到该订阅上的消费者消费。消费者的上线下线并不会像 Kafka 那样触发重平衡。当新的消费者上线后即开始参与 round-robin 的消息接收。这是因为与 Kafka 不同，Pulsar 并不使用分区来在消费者之间分发消息，而完全通过订阅来控制。Pulsar 当然也支持分区，这一点我们稍后将讨论，但消息的消费主要是由订阅控制，而不受分区控制。
 
-A Pulsar subscription will periodically redeliver unacknowledged messages to consumers. Not only that, it supports advanced acknowledgment semantics, such as single-message (selective) acknowledgement and negative acknowledgment, which are useful for work queues. Single-message acknowledgement allows messages to be acknowledged out of order, so that one slow consumer doesn’t end up blocking the delivery of messages to other consumers, which can happen when messages are acknowledged by cumulative range. Negative acknowledgement allows a consumer to put a message back on the topic to be handled by another consumer or processed later.
+Pulsar 订阅会周期性地将未确认消息重新投递给消费者。不仅如此，Pulsar 还支持高级确认语义，例如单条消息确认（选择性确认）和否定确认（negative acknowledgment），这一点对工作队列场景很有用。单条消息确认允许消息不按顺序确认，所以慢速消费者不会阻塞向其他消费者投递消息，而累积确认是可能发生这种阻塞的。否定确认允许消费者将消息放回主题中，之后可以被其他消费者处理。
 
-Pulsar supports routing messages to partitions by key, so it is also possible to implement competing consumers just like in Kafka. A shared subscription is simpler, but if you need to guarantee message order by key while scaling out consumers for parallel processing you can do that in Pulsar too.
+Pulsar 支持按 key 将消息路由到分区，所以也可以像 Kafka 那样实现竞争消费者。共享订阅这种实现方式更简单，但是如果你想在横向扩展消费者并行处理时也保证按 key 有序，Pulsar 也是可以实现的。
+
+
 
 ## Pulsar Subscription Models
 
