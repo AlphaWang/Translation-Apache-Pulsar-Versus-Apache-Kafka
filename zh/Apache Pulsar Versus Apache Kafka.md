@@ -1,34 +1,44 @@
-# Apache Pulsar Versus Apache Kafka
+# Apache Pulsar 与 Apache Kafka 之对比分析
 
-Apache Kafka is a widely used publish–subscribe (pub–sub) messaging system. It originated from LinkedIn and became a top-level Apache Software Foundation (ASF) project in 2011. In recent years, Apache Pulsar has emerged as a serious alternative to Kafka and is being adopted by an increasing number of enterprises in use cases where Kafka has long ruled. In this report, we go over the key differences between Kafka and Pulsar and give some insight into why Pulsar is gaining momentum.
+Apache Kafka 是一种使用广泛的发布订阅（pub-sub）消息系统。它起源于 LinkedIn，并于 2011 年成为 Apache 软件基金会（ASF）项目。而近年来，Apache Pulsar 逐渐成为 Kafka 的重要替代品，原本被 Kafka 占据的使用场景正越来越多地转向 Pulsar。在本报告中，我们将回顾 Kafka 与 Pulsar 之间的主要区别，并深入了解 Pulsar 为何势头如此强劲。
 
-# What Is Apache Pulsar?
 
-Like Kafka, Apache Pulsar was developed inside an internet-scale company to solve its own problems. In 2015, engineers at Yahoo! needed a pub–sub messaging system that could deliver low-consistency latency on commodity hardware. It also needed to scale to millions of topics and provide strong durability guarantees for all messages that it handled.
 
-The Yahoo! engineers evaluated the solutions that were available at the time, but couldn’t find one that met all their requirements. So, they set off to build a new pub–sub messaging system that would be able to support their global applications such as Mail, Finance, Sports, and Gemini Ads. Their solution, which became Apache Pulsar, has been running in production in Yahoo! since 2016.
+# 什么是 Apache Pulsar？
 
-# Architecture
+与 Kafka 类似，Apache Pulsar 也是起源于一家互联网公司内部，用于解决自己特有的问题。2015 年，雅虎的工程师们需要一个可以在商业硬件上提供低延迟的 pub-sub 消息系统，并且需要支持扩展到数百万个主题，并为其处理的所有消息提供强持久性保证。
 
-Let’s begin our comparison of Kafka and Pulsar by looking at the architecture of the two systems. Since Kafka was well known at the time, the creators of Pulsar were well aware of its architecture. As you will see there are some similarities and some differences between the two. This is because, as you would expect, the Pulsar creators thought there were parts of the Kafka architecture that worked well and some parts that could be improved. Since Kafka’s architecture was the starting point, we will start there as well.
+雅虎的工程师们评估了当时已有的解决方案，但无一能满足所有需求。于是他们决定着手构建一个全新的 pub-sub 消息系统，使之可以支持他们的全球应用程序，例如邮箱、金融、体育以及广告。他们的解决方案就是后来的 Apache Pulsar，自 2016 年就开始在雅虎的生产环境中运行。
+
+
+
+# 架构对比
+
+让我们先从架构角度对比 Kafka 和 Pulsar 这两个系统。由于在开发 Pulsar 的时候 Kafka 已经广为人知，所以 Pulsar 的作者对其架构了如指掌。你将看到这两个系统有相似之处，也有不同之处。如您所料，这是因为 Pulsar 的作者参考了 Kafka 架构中的可取之处，同时改进了其短板。既然一切都源于 Kafka，那我们就先从 Kafka 的架构开始讲起吧。
+
+
 
 ## Kafka
 
-Kafka has two major components: Apache ZooKeeper and the Kafka broker, as shown in [Figure 1]. ZooKeeper is used for service discovery, leadership election, and metadata storage for the cluster. In older versions, ZooKeeper was also used to store information about consumer groups, including topic consumption offsets, but that is no longer the case.
+Kafka 有两个主要组件：Apache ZooKeeper 和 Kafka Broker，如图 1 所示。ZooKeeper 用于服务发现、领导者选举以及元数据存储。在旧版本中，ZooKeeper 也被用来存储消费者组信息，包括主题消费偏移量；但新版本不再这样了。
+
+
 
 ![img](../img/apak_0101.png)
 
-*Figure 1. Kafka architecture*
+*图 1. Kafka 架构图*
 
-The Kafka broker provides the full messaging capabilities of Kafka. It terminates producer and consumer connections, accepting new messages from producers and sending messages to consumers. In order to provide message guarantees, the Kafka broker also provides persistent storage for messages on disk. Each Kafka broker is responsible for a set of topics.
+Kafka Broker 承包了 Kafka 的所有消息功能，包括终止生产者和消费者连接、接受来自生产者的新消息并将消息发送给消费者。为了提供消息持久化保证，Broker 还为消息提供持久化存储功能。每个 Kafka Broker 都负责一组主题。
 
-The Kafka broker is stateful. Each broker contains the complete state for its topics and requires that information to operate properly. If one broker fails, not just any broker can take over for it. Only another broker that has a replica of its topics can take over. If the load is getting too high on one broker, you can’t simply add another broker to distribute the load. You also need to move the topics—the state—around to balance the load in the cluster. Kafka provides tools to help with the rebalancing, but to operate a Kafka cluster, you must be aware of this relationship between the Kafka broker and the message state stored on its disk.
+Kafka Broker 是有状态的。每个 Broker 都存储了相关主题的完整状态，有了这些信息 Broker 才能正常运行。如果一个 Broker 发生失效，并不是任何 Broker 都可以接管它，而必须是拥有相关主题副本的 Broker 才能接管它。如果一个 Broker 负载太高，也不能简单地通过增加 Broker 来分担负载。还需要移动主题（状态）来平衡集群中的负载。虽然 Kafka 提供了用来帮助重平衡的工具，但是要运维 Kafka 集群的话你必须了解 Kafka Broker 与其磁盘上存储的消息状态的关系才行。
 
-The serving of messages—the movement of messages between producers and consumers—is coupled to the storing of messages in the Kafka broker. If you have a messaging pattern where all messages are quickly consumed, the need for storing messages may be low, but the need for serving messages can be high. Alternatively, you may have a messaging pattern where a large number of messages need to be stored because they are consumed slowly. In this case, the need to serve messages may be low, while the need to store them is high.
+消息处理（Serving）是指消息在生产者和消费者之间的流动，它是与 Kafka Broker 中的消息存储相耦合的。如果你的使用场景中所有消息都能被快速地消费掉，那么对消息存储的要就可能较低，而对消息处理的要求则较高。相反，如果你的使用场景中消息被消费得很慢，则需要存储大量消息。在这种情况下，对消息处理的要求可能较低，而对消息存储的需求则较高。
 
-Because the serving and stored messages are encapsulated in a single Kafka broker, you cannot easily scale out these dimensions independently. If you have high serving requirements in your cluster, you have to scale both serving and storage capacity because the solution is to add a Kafka broker. If you have high storage requirements, but low serving requirements the easiest thing to do is to just add more Kafka brokers, which scales out both the serving and storage capacity.
+由于消息的处理和存储都封装在单个 Kafka Broker 中，所以无法独立地扩展这两个维度。即便你的集群只对消息处理有较高要求，你还是得通过添加 Broker 实现扩展，也就是说不得不同时扩展消息处理和消息存储。而如果你对消息存储有较高要求，而对消息处理的要求较低，最简单的方案也是添加 Kafka Broker，也就是说还是必须同时扩展消息处理和消息存储。
 
-In the storage scaling case, you could add more disks or grow the disks on the existing brokers, but you will want to be careful not to create a set of unique Kafka brokers, each having a different storage configuration and capacity. An environment with “snowflake” servers is much more complex to manage than one where each server of a specific type is identically configured.
+在扩展存储的场景中，你可以在现有的 Broker 上添加更多磁盘或者增加磁盘容量，但需要小心不要创建出一些具有不同存储配置和容量的独特 Kafka Broker。这种“雪花”（Snowflake）服务器环境比具有统一配置的服务器环境要复杂得多，更难以管理。
+
+
 
 ## Pulsar
 
