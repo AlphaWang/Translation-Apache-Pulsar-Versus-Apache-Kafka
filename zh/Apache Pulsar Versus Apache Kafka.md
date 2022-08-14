@@ -188,31 +188,37 @@ Pulsar 支持按 key 将消息路由到分区，所以也可以像 Kafka 那样�
 
 
 
-## Pulsar Subscription Models
+## Pulsar 订阅模型
 
-The shared subscription is an easy way to implement a work queue in Pulsar. Pulsar also supports additional subscription models that enable other message consumption patterns: exclusive, failover, shared, and key_shared, which are shown in [Figure 8].
+共享订阅是 Pulsar 中实现工作队列的一种简单方法。Puslar 还支持其他订阅模型来支持多种消息消费模式：独占、 灾备、共享、键共享，如图 8 所示。
 
-With an exclusive subscription, no more than one consumer is allowed to consume messages from the topic. If any other consumer attempts to consume a message, it is rejected. This is useful if you need to guarantee that messages are processed in order by a single consumer.
+独占订阅模型中，不允许超过一个消费者消费主题消息。如果其他消费者尝试消费消息，则会被拒绝。如果你需要保证消息被单个消费者按顺序消费，那就使用独占订阅模型。
 
-With a failover subscription, multiple consumers are allowed to connect to a topic, but at any given time only one is allowed to consume from the topic. This establishes an active–standby relationship where one consumer is active for the subscription and any other consumers are on standby waiting to take over if the active consumer fails. When the active consumer disconnects or fails, all unacknowledged messages are redelivered to one of the standby consumers.
+灾备订阅模型中，允许多个消费者连接到一个主题，但是在任何时间都只有一个消费者可以消费主题。这就建立了一种主备关系，一个消费者处于活跃状态，其他的处于备用状态，当活跃消费者失效时进行接管。当活跃消费者断开连接或失败，所有未确认消息会被重新投递到某个备用消费者。
+
+
 
 ![img](../img/apak_0108.png)
 
-*Figure 8. Pulsar subscription models: exclusive, failover, shared, and key_shared*
+*图 8. Pulsar 订阅模型：独占、灾备、共享、键共享*
 
-As was already mentioned, one of the weaknesses of the competing consumers pattern as it is implemented in a shared subscription model is that messages can be processed out of order. In both Kafka and Pulsar, you can get around this by routing messages to partitions by key. Pulsar has recently introduced a new subscription model called key_shared that makes this even easier. This subscription model has the advantages of in-order delivery of messages by key without having to deal with partitions. Messages can be published to a single topic and distributed to multiple consumers like with a shared subscription. However, individual consumers only receive messages for a single key. With this type of subscription, it is possible to get in-order delivery of messages by key without having to partition the topic.
+前文已提到，基于共享订阅模型实现的竞争消费者模式的一个弱点是消息可能被乱序处理。在 Kafka 和 Pulsar 中，都可以通过将消息按 key 路由到分区来解决。Puslar 最近推出了一种新的名为 key_shared 的订阅模型，可以更简单地解决这个问题。这种订阅模式的优点是可以按 key 有序投递消息而无需关心分区。消息可以发布到单个主题并分发给多个消费者，这跟共享订阅模型一样。不一样的是，单个消费者只会接受对应某个 key 的消息。这种订阅模型可以通过 key 按顺序投递消息而无需对主题进行分区。
 
-# Pulsar: Pub–Sub and Queue Together
 
-As we have seen, both Kafka and Pulsar are able to support pub–sub messaging. They both use a log abstraction for their topics, so they are able to replay messages that have already been processed by consumers. But Kafka only has limited support for different ways a message can be consumed. It does not do automatic message redelivery and cannot guarantee that an unacknowledged message will not be lost. In fact, all messages outside the retention period are deleted, whether or not they have been consumed. Work queues with competing consumers can be implemented in Kafka, but with several caveats and considerations.
 
-Because of these limitations, organizations needing high-performance pub–sub messaging, delivery guarantees, and traditional messaging patterns often implement a traditional message broker like RabbitMQ alongside Kafka. They use Kafka for their high-performance pub–sub use cases and RabbitMQ for use cases that require delivery guarantees, such as work queues.
+# Pulsar：整合 Pub–Sub 与队列
 
-Pulsar can support high-performance pub–sub and traditional messaging patterns with delivery guarantees in a single messaging system. It is not difficult to implement a work queue using Pulsar—in fact, this was one of the original use cases that Pulsar was designed to handle. In organizations that have deployed parallel messaging systems, Kafka to handle high volume pub–sub and RabbitMQ to handle work queues, Pulsar can be used to consolidate down to one messaging system. Or even if only one type of messaging is initially required, Pulsar can be deployed to future proof against the emergence of new use cases.
+如我们所见，Kafka 和 Pulsar 都支持 pub-sub 消息投递。它们都使用日志来抽象主题，所以可以支持重放已被消费者处理过的消息。但是 Kafka 只能有限地支持按不同方式来消费消息，不会自动重新投递消息，也不能保证未确认的消息不会丢失。实际上，保留期之外的所有消息都会被删除，无论它们是否被消费过。Kafka 可以实现工作队列，但有很多事项需要注意和考虑。
 
-Operating one messaging system instead of two is, obviously, a lot easier, requiring fewer resources, both IT and human.
+由于这些限制，如果企业需要高性能 pub-sub 消息系统、需要可靠性投递保证以及传统的消息模式，他们通常会在 Kafka 之外使用传统的消息系统，例如 RabbitMQ。将 Kafka 用于高性能 pub-sub 场景，而将 RabbitMQ 用于要求可靠性投递保证的场景，例如工作队列。
 
-# Log Abstraction
+Pulsar 在单个消息系统中同时支持高性能 pub-sub 以及保证可靠性投递的传统消息模式。在 Pulsar 中实现工作队列非常简单——实际上这也是 Puslar 最开始设计时就想解决的场景。如果你正并行使用多个消息系统——使用 Kafka 处理高流量 pub-sub场景、使用 RabbitMQ 处理工作队列场景——那么可以考虑使用 Puslar 把它们合并成一个消息系统。即便最初只需要一种消息场景，也可以直接使用 Pulsar 以应对未来出现新的消息场景。
+
+运维一个消息系统显然要比运维两个要更加简单、所需的 IT 和人力资源也更少。
+
+
+
+# 日志抽象
 
 Now that we have looked at the high-level architecture of Kafka and Pulsar and covered the messaging patterns that can be implemented in both systems, let’s go into more detail about the building blocks of these systems. First, we’ll discuss the log abstraction.
 
