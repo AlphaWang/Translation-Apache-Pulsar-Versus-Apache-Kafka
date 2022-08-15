@@ -1,3 +1,5 @@
+[toc]
+
 # Apache Pulsar Versus Apache Kafka
 
 Apache Kafka is a widely used publish–subscribe (pub–sub) messaging system. It originated from LinkedIn and became a top-level Apache Software Foundation (ASF) project in 2011. In recent years, Apache Pulsar has emerged as a serious alternative to Kafka and is being adopted by an increasing number of enterprises in use cases where Kafka has long ruled. In this report, we go over the key differences between Kafka and Pulsar and give some insight into why Pulsar is gaining momentum.

@@ -1,3 +1,5 @@
+[toc]
+
 # Apache Pulsar 与 Apache Kafka 之对比分析
 
 Apache Kafka 是一种使用广泛的发布订阅（pub-sub）消息系统。它起源于 LinkedIn，并于 2011 年成为 Apache 软件基金会（ASF）项目。而近年来，Apache Pulsar 逐渐成为 Kafka 的重要替代品，原本被 Kafka 占据的使用场景正越来越多地转向 Pulsar。在本报告中，我们将回顾 Kafka 与 Pulsar 之间的主要区别，并深入了解 Pulsar 为何势头如此强劲。
@@ -32,7 +34,7 @@ Kafka Broker 承包了 Kafka 的所有消息功能，包括终止生产者和消
 
 Kafka Broker 是有状态的。每个 Broker 都存储了相关主题的完整状态，有了这些信息 Broker 才能正常运行。如果一个 Broker 发生失效，并不是任何 Broker 都可以接管它，而必须是拥有相关主题副本的 Broker 才能接管它。如果一个 Broker 负载太高，也不能简单地通过增加 Broker 来分担负载。还需要移动主题（状态）来平衡集群中的负载。虽然 Kafka 提供了用来帮助重平衡的工具，但是要运维 Kafka 集群的话你必须了解 Kafka Broker 与其磁盘上存储的消息状态的关系才行。
 
-消息处理（Serving）是指消息在生产者和消费者之间的流动，它是与 Kafka Broker 中的消息存储相耦合的。如果你的使用场景中所有消息都能被快速地消费掉，那么对消息存储的要就可能较低，而对消息处理的要求则较高。相反，如果你的使用场景中消息被消费得很慢，则需要存储大量消息。在这种情况下，对消息处理的要求可能较低，而对消息存储的需求则较高。
+消息处理（Serving）是指消息在生产者和消费者之间的流动，在 Kafka Broker 中消息处理与消息存储是相互耦合的。如果你的使用场景中所有消息都能被快速地消费掉，那么对消息存储的要就可能较低，而对消息处理的要求则较高。相反，如果你的使用场景中消息被消费得很慢，则需要存储大量消息。在这种情况下，对消息处理的要求可能较低，而对消息存储的需求则较高。
 
 由于消息的处理和存储都封装在单个 Kafka Broker 中，所以无法独立地扩展这两个维度。即便你的集群只对消息处理有较高要求，你还是得通过添加 Broker 实现扩展，也就是说不得不同时扩展消息处理和消息存储。而如果你对消息存储有较高要求，而对消息处理的要求较低，最简单的方案也是添加 Kafka Broker，也就是说还是必须同时扩展消息处理和消息存储。
 
@@ -212,69 +214,83 @@ Pulsar 支持按 key 将消息路由到分区，所以也可以像 Kafka 那样�
 
 由于这些限制，如果企业需要高性能 pub-sub 消息系统、需要可靠性投递保证以及传统的消息模式，他们通常会在 Kafka 之外使用传统的消息系统，例如 RabbitMQ。将 Kafka 用于高性能 pub-sub 场景，而将 RabbitMQ 用于要求可靠性投递保证的场景，例如工作队列。
 
-Pulsar 在单个消息系统中同时支持高性能 pub-sub 以及保证可靠性投递的传统消息模式。在 Pulsar 中实现工作队列非常简单——实际上这也是 Puslar 最开始设计时就想解决的场景。如果你正并行使用多个消息系统——使用 Kafka 处理高流量 pub-sub场景、使用 RabbitMQ 处理工作队列场景——那么可以考虑使用 Puslar 把它们合并成一个消息系统。即便最初只需要一种消息场景，也可以直接使用 Pulsar 以应对未来出现新的消息场景。
+Pulsar 在单个消息系统中同时支持高性能 pub-sub 以及保证可靠性投递的传统消息模式。在 Pulsar 中实现工作队列非常简单——实际上这也是 Puslar 最开始设计时就想解决的场景。如果你正并行使用多个消息系统——使用 Kafka 处理高流量 pub-sub场景、使用 RabbitMQ 处理工作队列场景——那么可以考虑使用 Puslar 把它们合并成单个消息系统。即便最初只有一种消息场景需求，也可以直接使用 Pulsar 以应对未来可能出现的新的消息场景。
 
-运维一个消息系统显然要比运维两个要更加简单、所需的 IT 和人力资源也更少。
+运维单个消息系统显然要比运维两个要更加简单、所需的 IT 和人力资源也更少。
 
 
 
 # 日志抽象
 
-Now that we have looked at the high-level architecture of Kafka and Pulsar and covered the messaging patterns that can be implemented in both systems, let’s go into more detail about the building blocks of these systems. First, we’ll discuss the log abstraction.
+现在我们介绍了 Kafka 与 Puslar 的高层次架构，也了解了这两个系统能实现的各种消息模式，接下来让我们更详细地了解这两个系统的底层模块。首先我们来看看日志抽象。
 
-The Kafka team deserves credit for the insight that a log is a great abstraction for a real-time data exchange system. Because logs are append-only, data can be written to them quickly, and because the data in a log is sequential, it can be extracted quickly in the order that it was written. Sequential reading and writing is fast, random is not. Persistent storage interactions are a bottleneck in any system that offers data guarantees, and the log abstraction makes this about as efficient as possible. Both Kafka and Pulsar use the log as their fundamental building block.
+Kafka 团队的设计思路值得称赞，日志的确是实时数据交换系统的一个很好的抽象。因为日志只能追加，所以数据可以快速写入；因为日志中的数据是连续的，所以可以按照写入顺序快速读取。数据的顺序读写是很快的，而随机读写则不然。在提供数据保证的系统中，持久化存储交互都是瓶颈，而日志抽象则让这一点变得尽可能高效。Kafka 和 Pulsar 都使用日志作为其底层模块。
 
-For the sake of simplicity, let’s assume a single-partition Kafka topic in the following sections, so that topic and partition are synonymous.
+为了简单起见，下文假设 Kafka 主题是单分区的，因此下文中主题和分区是同义词。
 
-## Kafka Log
 
-In Kafka, each topic is a log. Logs are stored on the Kafka broker as a single unit. A log, though implemented as a series of files, cannot be split between multiple brokers or between multiple disks on the same broker. This log as-a-single-unit generally works well, but it can cause complications at scale and during maintenance activities.
 
-For example, the maximum size of any log is limited by the disk that it is on. So, the disk on the broker that stores the log constrains the size of the topic. Adding another disk to the broker won’t help, since logs are a single unit and can’t be split across disks. The only option is to increase the size of the disk. In cloud environments this is possible, but if you are running on physical hardware, increasing the size of an existing disk is not an easy undertaking.
+## Kafka 日志
 
-Another complication of having this one-to-one relationship between the log and its backing files comes when trying to perform maintenance operations on a live system. If a broker server fails or you need to add a new broker to accommodate higher load, you end up copying sometimes large sets of log files between servers. Doing these large file copies while trying to keep up with real-time data can create a lot of strain on a Kafka cluster.
+在 Kafka 中，每个主题都是一个日志。日志作为单个存储单元存储在 Kafka Broker 上。虽然日志由一系列文件组成，但日志并不能拆分到多个 Broker 上，也不能拆分到同一个 Broker 上的多个磁盘上。这种将整个日志作为最小存储单元的方式通常运行良好，但是当规模增大或在维护期间会很麻烦。
 
-## Pulsar Distributed Log
+比方说日志的最大大小会受其所在磁盘容量的限制。因此，存储日志的 Broker 磁盘大小限制了主题的大小。在 Broker 上添加磁盘并不能解决问题，因为日志是最小存储单元，并不能跨磁盘拆分。唯一的选择是增加磁盘大小。这在云环境中是可行的，但如果你在物理硬件上运行 Kafka，那么增加现有磁盘的容量不是一件容易的事。
 
-Like Kafka, Apache Pulsar uses a log abstraction as the basis of its real-time messaging system. Every topic is a log in Pulsar as well. However, it takes a different approach to writing the log to storage. Instead of writing the log as a single unit on a single server, Pulsar breaks up the log into segments or ledgers. It then distributes those ledgers across multiple servers. In this way, it creates a distributed log that resides on multiple servers.
+还有另一件麻烦的事，由于日志与其底层文件是一对一绑定的，所以在实时系统上执行维护操作是很麻烦的。如果 Broker 服务器出现故障，或者需要增加新的 Broker 来分担高负载，都需要在服务器之间拷贝大量日志文件。在保持数据实时性的同时执行大量文件拷贝会给 Kafka 集群带来很大压力。
 
-A distributed log has several advantages. The maximum size of the log is no longer limited by the disk capacity of a single server. Since the segments are distributed across multiple servers, the log can grow to be as big as the total storage capacity of all the servers. Increasing the capacity of the distributed log is as simple as adding a new server to the cluster. Once the new server comes online, the distributed log can start using the extra capacity to write new log segments. There is no need to resize disks or rebalance partitions to distribute the load. And if a server fails, recovering from that failure is easier. Lost segments can be recovered from multiple different servers, improving recovery time.
 
-As you can imagine, getting a distributed log to work reliably is difficult. That is why Pulsar uses another Apache project, BookKeeper, to implement its distributed log. As part of running Pulsar, you need to run an Apache BookKeeper cluster. Although this introduces operational complexity, it provides the building blocks for the distributed log using a proven and widely adopted technology that is optimized for this use case. BookKeeper is designed for robust, low-latency writes and reads. The architecture of BookKeeper separates writing and reading onto separate disks so that, for example, slow consumers won’t impact the ability of producers to publish new messages.
 
-BookKeeper also allows Pulsar to provide high durability guarantees. When a message is stored in BookKeeper, it is flushed to disk before it is acknowledged back to the producer. If the server running BookKeeper fails, all acknowledged messages are guaranteed to have been stored permanently on disk. BookKeeper is able to provide this high durability guarantee while maintaining low latency.
+## Pulsar 分布式日志
 
-Contrast this to Kafka, which flushes messages to disk periodically by default. This means that a failure of a Kafka broker will almost always cause messages to be lost because they haven’t been flushed to disk. Of course, if you are running with in-service replicas, these lost messages can be recovered, but under a similar failure of a BookKeeper server, no recovery would be necessary since no messages would be lost. Kafka can be configured to flush each message to disk, but this comes with a performance penalty.
+与 Kafka 一样，Apache Pulsar 也使用日志抽象作为其实时消息系统的基础。每个主题在 Pulsar 中也是一个日志。然而 Pulsar 采用不一样的方式将日志写入存储。Pulsar 不是将日志作为最小存储单元存储到单个服务器，而是将日志分解为分片（或称为 Ledger），然后将 Ledger 分布到多个服务器。Pulsar 通过这种方式创建驻留在多个服务器上的分布式日志。
 
-## Tiered Storage
+分布式日志有许多优点。日志的最大大小不再受限于单个服务器的磁盘容量。由于分片是跨服务器分布的，所以日志可以增长到所有服务器的总存储容量一样大。增加分布式日志的容量就像往集群添加服务器一样简单。一旦新服务器上线，分布式日志即可开始使用新上线的容量来写入新的日志分片。也无需调整磁盘大小或重平衡分区来分配负载了。一旦服务器出现故障，故障恢复也很简单。因故障丢失的分配可以从多个不同的服务器上恢复出来，从而缩短恢复时间。
 
-Another advantage of separating the serving and storing in Pulsar is that it allows for the introduction of a third layer to the architecture: long-term (or cold) storage. Pulsar and BookKeeper are optimized for fast access to the messages stored in its topics. However, if you have a large set of messages but don’t need fast access to those messages, or you only need fast access to the latest messages, Pulsar lets you push those messages to cloud object storage such as AWS S3 or Google Cloud Storage. It does this by offloading older segments of a topic to the cloud provider and then removing them from the bookie local storage.
+显而易见，让分布式日志可靠地工作起来是很困难的。这也是为什么 Puslar 要使用另一个 Apache 项目（BookKeeper）来实现分布式日志的原因。要运行 Pulsar 的话必须同时运行 Apache BookKeeper 集群。尽管这会引入运维复杂度，但是 BookKeeper 这个分布式日志的底层组件已经过验证且被广泛应用。BookKeeper 专为健壮的、低延迟的读写而设计。举个例子，BookKeeper 从架构上将写入和读取分离到单独的磁盘，这样一来慢速消费者就不会影响生产者发布新消息的性能。
 
-Cloud object storage is significantly cheaper than the high-speed SSD drives that you would typically use to build a high-performing messaging cluster, so operational costs can be reduced. Since cloud storage provides practically infinite storage capacity, you don’t have to worry about exceeding the storage capacity of your cluster. You could have one very large topic that mostly resides in cloud storage, while all the other smaller topics are served by the high-speed disks attached to the bookie nodes.
+BookKeeper 还为 Puslar 提供高持久性保证。当消息存储到 BookKeeper 时，会先刷到磁盘再给生产者发回确认；即便 BookKeeper 服务器故障，所有已确认的消息仍然能保证永久存储在磁盘上。BookKeeper 能够在保持低延迟的同时提供这种高持久性保证。
 
-Moving to this three-layer architecture can fit nicely with use cases that require permanent storage of messages, such as event sourcing. With event sourcing all changes in state are recorded as events, which can be saved as messages in Pulsar. The current state of an application is determined by the entire history of events until the current time. To ensure that you can always reconstruct the current state, you must save the entire event history. Given Pulsar’s durability guarantees, practically infinite storage capacity when using tiered storage, and ability to replay all messages in a topic, it can be a good fit for event sourcing application architectures.
+反观 Kafka，其在默认情况下定期将消息刷到磁盘。这意味着 Kafka Broker 发生故障后几乎总会导致消息丢失，因为这些消息尚未被刷到磁盘。当然，通过配置在线副本数，这些丢失的消息可以恢复；但是 BookKeeper 服务器发生类似故障的情况下，不会有数据丢失，所以也就不需要数据恢复。Kafka 也可以配置为将每条消息即时刷到磁盘，但这会带来性能损失。
 
-# Partitions
 
-If you have used Kafka at all you are familiar with partitions. We have already touched on them several times in this report because it is unavoidable. Partitions are a fundamental concept in Kafka, and can be very useful. Pulsar also supports partitions, but they are optional.
 
-## Kafka Partitions
+## 分层存储
 
-In Kafka, all topics are partitioned. A topic may have only one partition, but it has to have at least one partition. Partitions are important because they are the fundamental unit of parallelism in Kafka. By spreading the work across partitions and therefore multiple brokers, the rate that can be processed by a single topic goes up. When Kafka was created, partitioning was needed to meet the high-throughput use cases Kafka was designed to tackle, especially since the goal was to be able to use commodity hardware.
+Pulsar 存储计算分离的另一个优点是允许在架构中引入第三层，即长期存储，又称冷存储。Pulsar 和 BookKeeper 针对快速访问主题中的消息进行了优化；然而，如果你的消息量非常大但不需要快速访问，或者只需要快速访问最新的消息即可，那么 Pulsar 允许你将这些消息推送到云对象存储，例如 AWS S3 或者 Google Cloud Storage。Pulsar 是这样实现该功能的：将主题中的老分片卸载（offload）到云提供商，然后从 bookie 本地存储中删除这些消息。
 
-In the years since Kafka’s inception, the capacity of commodity hardware has improved. Plus, there have been performance improvements in the Java virtual machine that Kafka runs on. These hardware and software improvements mean that today you can get good performance with a single partition using commodity hardware. From a performance perspective, a topic with a single partition is good enough for many use cases.
+云对象存储比起构建高性能消息系统常用的高速 SSD 磁盘要便宜得多，因此运营成本也更低。由于云存储提供了几乎无限的存储容量，所以你不必担心超出你集群的存储容量。非常大的主题可能主要驻留在云存储中，而其他较小的主题则驻留在 bookie 节点的高速磁盘。
 
-However, as we’ve already discussed, if you ever want to have multiple consumers read from your topic in Kafka, you can’t use a single partition. That’s because partitions are the unit of parallelism for production and consumption in Kafka. So even if a single partition is good enough for the incoming messaging rate to a topic, you will probably want to use multiple partitions so that you have the option of adding multiple consumers in the future. Yes, you can add partitions to a topic later, but if you are using key-based partitioning, this may change which keys are assigned to which partitions, which can affect the in-order processing of messages in a partition. Partitions consume resources (for example, file handles on the broker, memory on the client) so they are not lightweight. And although you can increase the number of partitions on a topic, you can never decrease the number of partitions on a topic.
+这种三层架构可以很好地适应需要永久存储消息的场景，比方说事件溯源。事件溯源是将所有状态变化都记录为事件，存储为 Pulsar 中的消息。应用的当前状态是由直到当前时间为止的整个事件历史记录确定。为了确保可以重建当前状态，你必须保存完整的事件历史。得益于持久性保证、使用分层存储实现近乎无限的存储容量，以及重放主题中所有消息的能力，Pulsar 非常适合事件溯源应用架构。
 
-Since partitions are fundamental to Kafka, to properly use Kafka you need to understand how they work. You need to consider the number of partitions you need (or might need in the future) when creating a topic. When connecting consumers, you need to understand how they interact with partitions in their consumer groups. And if you operate a Kafka cluster, everything works at the partition level, so you need to be partition-centric when doing maintenance and repairs.
 
-## Pulsar Partitions
 
-Pulsar also supports partitions, but they are completely optional. In fact, it is possible to run Pulsar without using partitions at all. You can create topics that you can publish a high volume of messages into and have multiple consumers consuming them from without using partitions. If you need additional performance or need key-based, in-order message consumption, you can create partitioned topics in Pulsar. They are fully supported, providing most of the same capabilities as Kafka.
+# 分区
 
-In Pulsar, partitions are implemented as a collection of topics with a suffix to indicate the partition number. For example, if you create a topic “mytopic” with three partitions, three topics will be automatically created with the names “mytopic-partition-1,” “mytopic-partition-2,” and “mytopic-partition-3.” Producers can connect to the main topic, “mytopic,” and the messages will be sent to the partition topics based on the routing mode defined by the publisher. It is also possible to publish directly to a partition topic. Similarly, a consumer can connect to the main topic or one of the partition topics. Like Kafka, you can increase the number of partitions for a topic, but you can never decrease the number of partitions.
+如果你用过 Kafka，那么对分区一定很熟悉。本文中已经多次提及分区，因为这是绕不过去的。分区是 Kafka 中的一个基本概念，非常有用。Pulsar 也支持分区，但是是可选的。
 
-Since partitions are optional in Pulsar, working with Pulsar is simpler, especially when you are first learning it. You can safely ignore partitions in Pulsar, unless you have use cases that demand the features provided by partitions. Not only does this simplify the operation of a Pulsar cluster, it makes dealing with Pulsar client APIs easier. Partitions are a useful concept, but if you can get by without dealing with them, it helps to simplify an inherently complex technology.
+
+
+## Kafka 分区
+
+Kafka 的所有主题都是分区的。一个主题可能只有一个分区，但必须至少有一个分区。分区在 Kafka 中是很重要的，因为分区是 Kafka 并行度的基本单元。将负载分散到多个分区即可分散到多个 Broker，单个主题的处理速度就能提高。Kafka 旨在处理高吞吐量，特别是要使用商用硬件来达到这个目的，分区在其中扮演着不可或缺的角色。
+
+自 Kafka 诞生以来，商用硬件的容量不断提升。此外运行 Kafka 的 Java 虚拟机性能也不断提升。 这种硬件和软件的提升意味着现在在商用硬件上使用单分区也可以获得良好的性能。从性能角度来看，单分区主题也足以满足很多使用场景。
+
+然而，正如前文所讨论的，如果你想用多个消费者读取 Kafka 主题，就不能使用单分区。因为分区时 Kafka 生产和消费并行度的基本单元。因此即便单个分区足以满足主题的输入消息速度，你也希望使用多分区，以便将来可以选择增加多个消费者。当然，你也可以在创建主题之后再增加分区，但如果使用基于 key 的分区，这将会改变哪些 key 分配给哪些分区，从而影响分区中消息的处理顺序；而且分区会消耗资源（例如 Broker 上的文件句柄、客户端的内存占用），所以增加分区绝非一个轻量操作；另外虽然可以增加主题分区，但永远不能减少一个分区的主题数。
+
+正因为分区是 Kafka 的基础，所以要想用好 Kafka 就必须理解分区的工作原理。在创建主题时，你就需要考虑需要（或将来可能需要）多少分区数；在连接消费者时，你需要理解消费者时如何与消费者组中的分区进行交互的；如果你运维一个 Kafka 集群，一切都以分区级别运行，在维护和维修时，你需要以分区为中心。
+
+
+
+## Pulsar 分区
+
+Pulsar 也支持分区，但是它们完全是可选的。事实上运行 Pulsar 时完全可以不使用分区。不分区的主题即可支持发布大量消息并支持多个消费者读取。如果你需要额外的性能，或需要基于 key 的有序消息消费，那么可以创建 Pulsar 分区主题。Pulsar 完全支持分区，其功能与 Kafka 大体相同。 
+
+Pulsar 分区被实现为一组主题的集合，用后缀来表示分区编号。例如创建一个包含三个分区的主题 `mytopic`，则会自动创建三个主题分别名为 `mytopic-parition-1`、`mytopic-partition-2` 和 `mytopic-partition-3`。生产者可以连接到主主题 `mytopic`，根据生产者定义的路由规则将消息分发到分区主题。也可以直接发布到分区主题。同样地，消费者可以连接到主主题，也可以连接到一个分区主题。与 Kafka 一样，可以增加主题的分区数，但永远不能减少分区数。
+
+由于分区在 Pulsar 中是可选的，所以 Pulsar 使用起来更加简单，尤其对于初学者来说。在 Pulsar 中你可以放心地忽略分区，除非你的使用场景需要用到分区提供的功能。这不仅简化了 Pulsar 集群的运营，也使得 Pulsar 客户端 API 更容易使用。分区是个有用的概念，不过如果你无需处理分区即可满足需求，那就有助于简化固有的复杂技术。 
+
+
 
 # Performance
 
