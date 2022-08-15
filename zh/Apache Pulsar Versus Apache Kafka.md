@@ -76,8 +76,6 @@ Kafka 使用的是 Leader-Follower 复制模型。对每个主题（确切说是
 
 Pulsar 使用的则是法定人数投票复制模型（quorum-vote）。Pulsar 并行写入消息的多个副本（Write Quorum）。一旦一定数量的副本被确认写入成功，则该消息被确认（Ack Quorum）。与 Leader-Follower 模型不同，Pulsar 将副本分散（或称为条带化写入）到一组存储节点（Ensemble）中，这能改善读写性能。这也意味着新的节点添加成功后，即可立即服务读写。
 
-In [Figure 4], the message is sent to the broker. It is then broken into segments and sent to multiple bookie nodes. All the bookie nodes store the segments and acknowledge back to the broker. Once the broker has received enough acknowledgements for the segments from enough bookies, it will acknowledge the message back to the producer.
-
 如图 4 所示，消息被发往 Broker，然后被切分成分片（Segment）并写入多个 Bookie 节点。这些 Bookie 节点存储分片并发送确认给 Broker。一旦 Broker 从足够多的 Bookie 节点收到足够多的分片确认，则向生产者发送消息确认。
 
 ![img](../img/apak_0104.png)
@@ -115,10 +113,6 @@ Pub-sub 消息模式并不是什么新鲜事物，且可由多种消息系统实
 ## 日志抽象
 
 Kafka 与传统消息系统的另一个主要区别是其将日志作为处理消息的主要抽象。生产者写入主题，即写入日志；而消费者独立地读取日志。然而与传统消息系统不同，消息被读取后并不会从日志中删除。消息被持久化到日志中直至配置的时间到期。Kafka 消费者确认消息后，并不会删除消息，而是提交一个偏移量值来表示它已读取了多少日志。此操作不会从日志中删除消息或以任何方式修改日志。总之，日志是不可变的。
-
-
-
-To prevent the log from becoming infinitely long, messages in the log expire (typically) after a period of time (retention period). Expired messages are removed from the log. In Kafka, the default retention period is seven days. [Figure 6] illustrates how published messages are appended to the log, while consumers read at different offsets. In time, messages in the log expire and are removed.
 
 为了防止日志变得无限长，日志中的消息在一段时间（保留期）后会过期。过期的消息会从日志中删除。Kafka 默认的保留期是七天。图 6 展示了发布的消息是如何附加到日志中，而消费者以不同的偏移量读取它。日志中的消息到期后会过期并被删除。
 
@@ -292,45 +286,49 @@ Pulsar 分区被实现为一组主题的集合，用后缀来表示分区编号�
 
 
 
-# Performance
+# 性能
 
-Kafka is known for its performance. It made its mark by being able to support high volumes of messages in real-time environments. Comparing performance between messaging systems can be tricky. All systems have performance sweet spots and performance blind spots. To make a fair comparison between them is difficult.
+Kafka 以其性能而闻名，以能够在实时环境中支持海量消息而著称。比较消息系统之间的性能有点棘手，每个系统都有性能最佳点和性能盲点，很难进行公平的比较。
 
-One project that aims to make performance comparisons between messaging systems fair is the [OpenMessaging Project](http://openmessaging.cloud/), a Linux Foundation Collaborative Project. The OpenMessaging Project, which is supported by multiple providers of messaging systems, has a goal of providing vendor-neutral and language-independent standards for messaging and streaming technologies. The project includes a performance testing framework that supports various messaging technologies, including Kafka and Pulsar.
+[OpenMessaging 项目](http://openmessaging.cloud/) 是一个旨在公平比较消息系统之间性能的项目，它是一个 Linux 软件基金会协作项目。OpenMessaging 项目由多个消息系统供应商支持，其目标是为消息和流系统提供供应商中立和语言独立的标准。该项目包含一个性能测试框架，支持多种消息系统，包括 Kafka 和 Pulsar。
 
-The idea is that by using a standard test framework and methodology, a certain degree of fairness can be introduced into the evaluation. All the code for the OpenMessaging Project is open source and anyone is welcome to run the benchmark tests and produce their own results.
+其思想是利用标准的测试框架和方法，在评估中引入一定程度的公平性。OpenMessaging 项目的所有代码都是开源的，任何人都可以运行基准测试并输出自己的结果。
 
-Going through a detailed performance analysis between Kafka and Pulsar is outside the scope of this report. However, there are published results using the OpenMessage Project benchmark framework that indicate Pulsar outperforms Kafka.
+对 Kafka 和 Pulsar 进行详细的性能分析已经超出了本文的范围。不过一些基于 OpenMessaging 基准测试框架的测试结果表明 Pulsar 的性能要优于 Kafka。
 
-A [report](https://oreil.ly/vGoPy) published by GigaOm provides these headline results:
+GigaOm 发布的一份[报告](https://oreil.ly/vGoPy)显示：
 
-- Up to 150% higher maximum throughput with Pulsar
-- Up to 40% lower message latency and greater consistency in latency with Pulsar
-- Better scalability that delivers consistent results across a range of message sizes and partition counts
+- Pulsar 的最大吞吐量高出 150%
+- Pulsar 的消息延迟降低了 40%，且更加稳定
+- Pulsar 扩展性更好，在不同消息大小和分区数量下均能提供一致的结果
 
-To validate some of these results, I have done a [detailed comparison](https://oreil.ly/34h_v) of the latency between Kafka and Pulsar using the OpenMessage Project benchmark framework. In that comparison, I came to the conclusion that Pulsar provides more predictable latency over time. In many cases, Pulsar provides lower latency than Kafka, especially if you need strong durability guarantees or a large number of partitions.
+为了验证其中一些结果，我使用 OpenMessaging 项目的基准框架对 Kafka 和 Pulsar 的延迟进行了一个 [详细对比](https://oreil.ly/34h_v)。在这次对比中，我得出的结论是 Pulsar 能提供更加可预测的延迟。在许多情况下，Pulsar 的延迟比 Kafka 更低，尤其是在需要强持久性保证场景下，或需要大量分区的场景下。
 
-# Tenancy
 
-Tenancy is the number of users or groups of users that can use the system independently. In a single tenant system, all the resources of the system are shared, so users of the system have to be aware of what other users of the system are doing. Since the resources are shared, this introduces contention and possible collisions. When using a single-tenant system with multiple user groups, you typically need to use multiple copies of the system, one for each group, to provide isolation and privacy.
 
-In a multitenant system, different user groups, or tenants, can use the system independently. Each tenant is separate from the other tenants of the system. Resources are divided between tenants so each tenant has their own private instance of the system. There is one system, but each tenant gets their own virtual, isolated environment. A multitenant system can support multiple user groups.
+# 多租户
 
-Since a messaging system is core infrastructure, it will eventually be used by different teams for different projects. Having to create a new cluster for each team or project is operationally complex and doesn’t make efficient use of resources. Because of this, multitenancy in a messaging system is a desirable feature.
+租户是指可以独立使用系统的用户或用户组数量。在单租户系统中，所有的资源都是共享的，因此系统用户需要知道系统的其他用户在做什么。由于资源是共享的，必然引入争用和可能的冲突。如果多个用户组使用单租户系统，那么通常需要为系统提供多个拷贝，每个用户组使用一个拷贝，以提供隔离性和隐私。
+
+在多租户系统中，不同的用户组或租户可以独立地使用系统。每个租户都是与其他租户隔离的。系统资源被各租户割据，所以每个用户都有自己的系统私有实例。我们提供一套系统，但每个租户都有自己的虚拟隔离环境。多租户系统可以支持多个用户组。
+
+消息系统是核心基础设施，它最终会被多个不同的团队用于不同的项目。如果为每个团队或项目都创建一个新集群，那么运维复杂度会很高，而且也不能有效地利用资源。因此，多租户在消息系统中是一个令人向往的特性。
 
 ## Pulsar
 
-Multitenancy was a key design requirement of Pulsar. Because of that, Pulsar has several multitenancy features that allows it to support multiple teams or multiple projects within a single Pulsar system.
+多租户是 Pulsar 的关键设计要求。正因为如此，Pulsar 有多个多租户特性，让单个 Puslar 系统可以支持多个团队以及多个项目。
 
-In Pulsar, a tenant has its own virtual messaging environment separate from the other tenants. Topics created by one tenant are separate from topics created by another tenant. Typically, a tenant will be used by all members of a team or department. Each tenant can have multiple namespaces. A namespace is a grouping of topics. The same topic name can exist in multiple namespaces. A namespace is a convenient way to group all the topics involved in specific project.
+在 Pulsar 中，每个租户有其自己的虚拟消息环境，与其他租户隔离开。一个租户创建的主题也与其他租户创建的主题隔离。通常，一个租户可以被一个团队或部门的所有成员使用。每个租户可以有多个命名空间。命名空间包含一组主题。不同命名空间可以包含同名的主题。命名空间可以便捷地将特定项目中的所有主题组织到一起。 
 
-Namespaces are also a mechanism for sharing policy configuration between topics. For example, all the topics that need a retention time of 14 days can be grouped into a namespace. By setting this policy on the namespace, all topics in that namespace inherit that policy.
+命名空间也是一种在主题之间共享策略配置的机制。举个例子，所有需要 14 天保留期的主题可以归到同一命名空间。通过在命名空间上配置该策略，该命名空间内的所有主题都将继承这个策略。
 
-When there are multiple tenants sharing a resource, it is important to have mechanisms to ensure that all tenants get fair access. You want to ensure that one tenant doesn’t consume all resources, starving out the other tenants.
+当多个租户共享同一资源时，很重要的一点是要有某种机制确保所有租户都能公平访问。需要确保一个租户不会消耗掉所有资源，导致其他租户饥饿。
 
-Pulsar has a number of policies that can be used to ensure that a single tenant doesn’t consume all the resources of the cluster. There are policies that limit outbound message rate, unacknowledged message storage, and message retention periods. These policies can all be set at the namespace level, so that groups of topics can have different policies.
+Pulsar 有多种策略可以确保单个租户不至于消耗掉集群里的所有资源。这些策略可以限制消息出站速率、限制未确认消息存储以及限制消息保留期。可以在命名空间级别设置这些策略，这样主题组可以有不同的策略。
 
-In order for multitenancy to work, Pulsar supports authorization at the namespace level. This means you can limit access to topics in a namespace. You can control who is allowed to create topics in a namespace and who is allowed to produce and consume from those topics.
+为了让多租户更好地工作，Pulsar 支持命名空间级别的授权。你可以限制对命名空间中主题的访问，可以控制谁有权限在命名空间中创建主题，以及谁有权限生产和消费这些主题。
+
+
 
 ## Kafka
 
