@@ -314,6 +314,8 @@ GigaOm 发布的一份[报告](https://oreil.ly/vGoPy)显示：
 
 消息系统是核心基础设施，它最终会被多个不同的团队用于不同的项目。如果为每个团队或项目都创建一个新集群，那么运维复杂度会很高，而且也不能有效地利用资源。因此，多租户在消息系统中是一个令人向往的特性。
 
+
+
 ## Pulsar
 
 多租户是 Pulsar 的关键设计要求。正因为如此，Pulsar 有多个多租户特性，让单个 Puslar 系统可以支持多个团队以及多个项目。
@@ -326,77 +328,87 @@ GigaOm 发布的一份[报告](https://oreil.ly/vGoPy)显示：
 
 Pulsar 有多种策略可以确保单个租户不至于消耗掉集群里的所有资源。这些策略可以限制消息出站速率、限制未确认消息存储以及限制消息保留期。可以在命名空间级别设置这些策略，这样主题组可以有不同的策略。
 
-为了让多租户更好地工作，Pulsar 支持命名空间级别的授权。你可以限制对命名空间中主题的访问，可以控制谁有权限在命名空间中创建主题，以及谁有权限生产和消费这些主题。
+为了让多租户更好地工作，Pulsar 支持命名空间级别的授权。这意味着你可以限制对命名空间中主题的访问，可以控制谁有权限在命名空间中创建主题，以及谁有权限生产和消费这些主题。
 
 
 
 ## Kafka
 
-Kafka is a single-tenant system. There is a global namespace for all topics. Policies such as retention time can be set as a global default, or overridden on individual topics. There is no ability to group related topics together or apply policy on an arbitrary group of topics.
+Kafka 是单租户系统，所有主题都属于一个全局命名空间。诸于保留期等策略可以设置为全局默认值，或者在单个主题上进行覆盖。但无法将相关主题组织到一起，也无法将策略应用到一组主题上。
 
-For authorization, Kafka supports access control lists (ACLs), which allow you to restrict who can produce and consume from a topic. ACLs allows fine-grain control over authorization in the cluster. You can set policies on various resources such as the cluster, topics, and consumer groups. You can also specify various specific operations such as create, describe, alter, and delete. In addition to authorization based on user (principal), you can also define host-based authorization. For example, you can allow User:Bob to write to and read from a topic but only from IP address 198.51.100.0. This detailed level of authorization and host-based restrictions is not available in Pulsar, which only supports a handful of operations (administer, produce, consume) and does not offer host-based authorization.
+关于授权，Kafka 支持访问控制列表（ACL），允许限制谁可以从主题上生产和消费。ACL 允许对集群中的授权进行细粒度的控制，可以对各种资源设置策略，比如集群、主题和消费者组；还可以指定各种特定的操作，比如创建、描述、更改和删除。除了基于用户（主体）的授权之外，还支持基于主机的授权。例如你可以允许 `User:Bob` 读写某个主题，但限制只能从 IP 地址 198.51.100.0 进行读写。而 Pulsar 没有这种细粒度的授权和基于主机的限制，只支持少数几个操作（管理、生产、消费），并且不提供基于主机的授权。
 
-Although Kafka has more flexibility with its authorization controls, it is still fundamentally a single-tenant system. If multiple groups are using the same Kafka cluster, they need to ensure that their topic names don’t collide and that ACLs are applied correctly. With Pulsar, multitenancy is built in, so sharing a cluster between different teams and project groups is straightforward.
+尽管 Kafka 在授权控制上有更大的灵活性，但它本质上仍然是一个单租户系统。如果多个用户组使用同一个 Kafka 集群，他们需要保证主体名称不会冲突，并且 ACL 被正确应用。而多租户在 Pulsar 中是内置的，因此在不同团队和项目之间共享集群是非常简单的。 
 
-# Geo-Replication
 
-For systems like Kafka and Pulsar to achieve high performance, it’s important for their components to be located close together so they can achieve low-latency communication between them. This means that Kafka and Pulsar are deployed in a single data center with high-speed networking between the components. Replication of messages within a cluster protects you from message loss and downtime when one (or possibly more) components (compute, storage, network) of the cluster fails. In cloud environments, the components can be distributed between availability zones within a data center (region) to protect against the failures of a zone.
 
-If the entire data center fails or becomes isolated then there will be an outage (or loss, in the event of a disaster) of the messaging system. If this is not acceptable for your use case, then you can use geo-replication. With geo-replication, messages are replicated to another cluster at a remote location. For every message published in one data center, that message is automatically—and reliably—copied to another data center. This protects against the failure of an entire data center.
+# 跨地域复制
 
-Geo-replication is also useful for global applications that have messages produced in one part of the world being consumed by consumers in other parts of the world. By replicating messages to remote data centers, load can be distributed and responsiveness for clients can be improved.
+Kafka 和 Pulsar 这类系统要实现高性能，重要一点是让其中的组件互相靠近以便互相通讯的时延较低。这意味着 Kafka 和 Pulsar 要部署在单个数据中心，组件之间由高速网络互联。当集群内一个或多个组件（计算、存储、网络）发生故障时，集群内的消息复制机制保证免受消息丢失和服务宕机之苦。在云环境中，组件可以分布到一个数据中心（区域）内的多个可用区，以防止一个可用区发生故障。
+
+但如果整个数据中心发生故障或被隔离，那么消息系统则会发生宕机（或发生灾难时丢失数据）。如果这对你来说不可接受，那么你可以使用跨地域复制。跨地域复制是指将消息复制到远端的另一个集群。发布到数据中心的每条消息都会被自动且可靠地复制到另一个数据中心。这可以防止整个数据中心发生故障。
+
+跨地域复制对于全球应用程序来说也非常有用，消息从世界上某个位置生产出来，并被世界上其他地方的消费者消费。通过将消息复制到远程数据中心，可以分散负载，并提高客户端响应能力。
 
 ## Pulsar
 
-When the team at Yahoo! set out to build what would eventually become Apache Pulsar, the ability to replicate messages between geographically distant data centers was a key requirement. They needed to make sure that messages would still be available even if an entire data center failed. So with Pulsar, geo-replication is a core feature, fully integrated into the administration interfaces. Geo-replication can be enabled and disabled at the namespace level. The administrator can easily configure which topics will be replicated and which will not be replicated. Individual producers can even exclude certain data centers from receiving a copy of the messages that it publishes.
+雅虎的团队在构建后来成为 Apache Pulsar 的消息系统之初，一个关键需求就是要支持在跨地域的数据中心之间复制消息，需要确保即便整个数据中心发生故障消息仍然可用。因此对于 Pulsar 来说跨地域复制是一项核心功能，完全集成到管理界面中。可以在命名空间级别开启或关闭跨地域复制。管理员可以轻松配置哪些主题需要复制，哪些不需要复制。甚至生产者在发布消息时可以排除某些数据中心让它不接收消息复制。
+
+
 
 ![img](../img/apak_0109.png)
 
-*Figure 9. Active–standby replication*
+*图 9. Active–standby 复制*
 
-Geo-replication in Pulsar supports multiple topologies, such as active-standby, active–active, full mesh, and edge aggregation. [Figure 9] illustrates active–standby replication. All messages published to the active data center (Data Center 1) are replicated to the standby data center (Data Center 2). If the active data center fails, clients can connect to the standby data center. For active–standby replication, Pulsar has recently introduced replicated subscriptions. This feature keeps the subscription state synchronized between the active and standby clusters so that applications can switch to the backup data center and pick up where they left off.
+Pulsar 的跨地域复制支持多种拓扑结构，例如主备（active-standby）、双活（active-active）、全网格（full mesh）以及边缘聚合（edge aggregation）。图 9 展示的是 active-standby 复制。所有消息都被发布到主数据中心（Data Center 1），然后被复制到备用数据中心（Data Center 2），如果主数据中心发生故障，客户端可以切换到备用数据中心。对于主备复制拓扑，Pulsar 新近引入了复制订阅（replicated subscription）功能，该功能在主备集群之间同步订阅状态，以便应用程序可以切换到备用数据中心并从中断的地方继续消费。
 
-In active–standby replication, clients are only connected to one data center at a time. In active–active replication, which is shown in [Figure 10] in a full-mesh configuration, clients connect to multiple data centers. The messages published in one data center are replicated to multiple data centers.
+在主备（active–standby）复制中，客户端一次只连接到一个数据中心。而在双活（active-active）复制中，客户端连接到多个数据中心。图 10 所示的事一个全网格配置的双活复制拓扑。发布到一个数据中心的消息会被同步到其他多个数据中心。
 
-[Figure 11] shows an edge-aggregation topology. In this topology, clients connect to multiple data centers that replicate the messages to a central data center for processing. If the edge data centers are located near the clients, then this allows for quick message acknowledgment of published messages even if the central data center is geographically distant.
+图 11 所示的是边缘聚合拓扑（edge aggregation）。在此拓扑中，客户端连接到多个数据中心，这些数据中心将消息复制到中央数据中心进行处理。如果边缘数据中心处于客户端附近，那么即使中央数据中心离得很远，已发布的消息也能快速被确认。
 
 ![img](../img/apak_0110.png)
 
-*Figure 10. Active–active, full-mesh replication*
+*图 10. Active–active, full-mesh replication*
 
 ![img](../img/apak_0111.png)
 
-*Figure 11. Edge aggregation*
+*图 11. Edge aggregation*
 
-It is also possible to do synchronous geo-replication with Pulsar. In a typical geo-replication setup, the message replication is done asynchronously. A producer sends a message to its primary data center. The message is persisted and acknowledged back to the producer. It is then reliably copied to the remote data center. The overall process is asynchronous because the message is acknowledged to the producer before it is replicated to the remote data center. This works fine as long as the remote data center is operational and reachable through the network. However, if there is a problem with the remote data center or the network connection is slow, the acknowledged message may be waiting to be copied to the remote data center. If the primary data center fails before the message can be copied to the remote data center, then the message can be lost.
+Pulsar 也可以进行同步跨地域复制。在典型的跨地域复制配置中，消息复制是异步完成的。生产者将消息发送到主数据中心，然后消息被持久化并确认回生产者；然后再被可靠地复制到远端数据中心。整个过程是异步的，因为消息在被复制到远端数据中心之前已向生产者确认。只要远端数据中心可用并且可以通过网络访问，这种异步复制没有任何问题。然而，如果远端数据中心出现问题，或者网络连接变慢，那么已确认的消息可能不能马上被复制到远端数据中心。如果主数据中心在消息被复制到远端数据中心之前发生故障，那么消息可能会丢失。
 
-If this type of loss is not acceptable for your use case, you can configure Pulsar to do synchronous replication. With synchronous replication the message is not acknowledged back to the production until it is safely stored in multiple data centers. Since the messages need to be sent to multiple data centers that are geographically distant, this setup will take longer to acknowledge published messages because of the network latency between the data centers. However, this ensures that messages will not be lost even in the event of the complete failure of a data center.
+如果这种消息丢失对你来说不可接受，那么可以配置 Pulsar 进行同步复制。在同步复制时，消息直到被安全地存储到多个数据中心之后才会确认回生产者。由于消息要发到多数距离分散的数据中心，而数据中心之间有网络延迟，因此同步复制确认消息的时间会更长一些。不过这保证了即便整个数据中心故障也不会发生消息丢失。
 
-Pulsar has a rich set of geo-replication functionality that supports almost any configuration you can think of. The configuration and management of geo-replication is fully integrated into Pulsar and does not require external packages or extensions.
+Pulsar 有着丰富的跨地域复制功能，支持几乎所有你能想到的配置。跨地域复制的配置和管理完全集成到 Pulsar 中，无需外部包也无需扩展。
+
+
 
 ## Kafka
 
-There are multiple ways to do geo-replication in Kafka, or mirroring, as it is called in the Kafka documentation. Kafka includes a tool called MirrorMaker that replicates messages from one cluster to another cluster as they are produced. It is a simple tool that connects a Kafka consumer in one data center to a Kafka producer in another. It cannot be dynamically configured (you need to stop and start the tool to change its configuration) and it does not provide any configuration or subscription synchronization between the local and remote cluster.
+Kafka 中有多种方式可以进行跨地域复制，或者像 Kafka 文档那样称之为 mirroring。Kafka 提供了一个 MirrorMaker 工具，用来在消息生产后将其从一个集群复制到其他集群。这个工具很简单，将一个数据中心的 Kafka 消费者连接到另一个数据中心的 Kafka 生产者。它不能动态配置（改变配置后需要重启），且不支持在本地和远端集群机制同步配置或同步订阅。
 
-Another geo-replication option is uReplicator, which was developed by Uber and then open sourced. Uber created uReplicator to address many of the shortcomings of MirrorMaker, improving its performance, scalability, and operations. Certainly, uReplicator is a better geo-replication solution for Kafka. However, it is an independent distributed system with controller and worker nodes that needs to be operated in parallel with the Kafka cluster.
+另一个跨地域方案是 uReplicator，由 Uber 开发并开源。Uber 之所以开发 uReplicator 是为了解决 MirrorMaker 的许多缺点，提高其性能、可扩展性和可运维性。无疑 uReplicator 是更好的 Kafka 跨地域复制方案。然而它是一个独立的分布式系统，有控制器节点和工作节点，需要与 Kafka 集群并行运维。
 
-There are also commercial solutions for geo-replication in Kafka, such as Confluent Replicator. The Confluent Replicator supports active–active replication, synchronizes configuration between clusters, and is easier to operate than MirrorMaker. It depends on Kafka Connect, which is a distributed system that needs to be operated in parallel with the Kafka cluster.
+Kafka 中还有用于跨地域复制的其他商业解决方案，例如 Confluent Replicator。它支持双活（active-active）复制，在集群间同步配置，并且比 MirrorMaker 更容易运维。它依赖于 Kafka Connect，需要与 Kafka 集群并行运维。
 
-Geo-replication is possible in Kafka, but it’s not simple. From having to choose among multiple solutions to having to run parallel tools or entire distributed systems to support it, geo-replication is complex, especially when compared to Pulsar’s built-in geo-replication capabilities.
+在 Kafka 中是可以实现跨地域复制的，但做起来并不简单。必须在多个方案中做出选择，需要并行运维各种工具，甚至并行运维整个分布式系统；所以说 Kafka 跨地域复制是很复杂的，尤其与 Pulsar 内置的跨地域复制能力相比。
 
-# Ecosystem
 
-We have spent a lot of time looking at the core Kafka and Pulsar technology. Now let’s zoom out and take a look at the bigger picture of the ecosystem that surrounds each project.
 
-## Community and Related Projects
+# 生态
 
-Kafka was open sourced in 2011 while Pulsar was open sourced in 2016. So Kafka had a five-year headstart on creating a community and having others build around it. Kafka is widely deployed and many have built open source and commercial offerings. There are several commercial Kafka distributions available and many cloud providers offer managed Kafka services.
+我们花了大量篇幅研究 Kafka 与 Pulsar 的核心技术。现在让我们放宽视野，看看围绕他们的生态系统。
 
-Not only are there many options for running Kafka, there are many open source projects that provide clients, tools, integrations, and connectors for Kafka. Since Kafka is run by large, internet-scale companies, many of these projects have originated from companies like Salesforce, LinkedIn, Uber, and Shopify. And, of course, there are many commercial complementary pieces available for Kafka.
+## 社区与相关项目
 
-Kafka knowledge is also widely distributed, so answers to questions you have about Kafka are easy to find. There are many blog posts, online courses, over 15,000 Stack Overflow questions, more than 500 contributors on GitHub, and plenty of people with extensive experience using Kafka.
+Kafka 于 2011 年开源，而 Pulsar 于 2016 年开源。因此 Kafka 在社区构建和周边产品这方面有五年的领先优势。Kafka 被广泛应用，已构建出了许多开源和商业产品。现在有多个商业 Kafka 发行版本可用，也有许多云提供商提供托管 Kafka 服务。
+
+不仅有许多运行 Kafka 的选型，还有许多开源项目为 Kafka 提供各种客户端、工具、集成和连接器。由于 Kafka 被大型互联网公司使用，因此其中许多项目来自 Salesforce、LinkedIn、Uber 和 Shopify 这类公司。当然，Kafka 同时还有许多商业补充项目。
+
+Kafka 知识也广为人知，因此很容易找到有关 Kafka 问题的答案。有很多博客文章、在线课程、超过 15,000 条 StackOverflow 问题、超过 500 位 GitHub 贡献者，以及有大量使用 Kafka 经验丰富的专家。
 
 Clearly, Pulsar cannot hope to have matched the size of the Kafka ecosystem and community in the relatively short time it has been an open source project. However, it did quickly progress from an incubator project in Apache to a top-level project and has shown steady increase in many of its community metrics, such as GitHub contributors and members of its Slack workspace. And although it is relatively small, the Pulsar community is welcoming and active.
+
+显然，Pulsar 
 
 Despite all that, Kafka has a clear advantage in this category.
 
