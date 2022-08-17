@@ -248,7 +248,7 @@ BookKeeper 还为 Puslar 提供高持久性保证。当消息存储到 BookKeepe
 
 
 
-## 分层存储
+## 多级存储
 
 Pulsar 存储计算分离的另一个优点是允许在架构中引入第三层，即长期存储，又称冷存储。Pulsar 和 BookKeeper 针对快速访问主题中的消息进行了优化；然而，如果你的消息量非常大但不需要快速访问，或者只需要快速访问最新的消息即可，那么 Pulsar 允许你将这些消息推送到云对象存储，例如 AWS S3 或者 Google Cloud Storage。Pulsar 是这样实现该功能的：将主题中的老分片卸载（offload）到云提供商，然后从 bookie 本地存储中删除这些消息。
 
@@ -398,74 +398,80 @@ Kafka 中还有用于跨地域复制的其他商业解决方案，例如 Conflue
 
 我们花了大量篇幅研究 Kafka 与 Pulsar 的核心技术。现在让我们放宽视野，看看围绕他们的生态系统。
 
-## 社区与相关项目
+## 社区及相关项目
 
 Kafka 于 2011 年开源，而 Pulsar 于 2016 年开源。因此 Kafka 在社区构建和周边产品这方面有五年的领先优势。Kafka 被广泛应用，已构建出了许多开源和商业产品。现在有多个商业 Kafka 发行版本可用，也有许多云提供商提供托管 Kafka 服务。
 
 不仅有许多运行 Kafka 的选型，还有许多开源项目为 Kafka 提供各种客户端、工具、集成和连接器。由于 Kafka 被大型互联网公司使用，因此其中许多项目来自 Salesforce、LinkedIn、Uber 和 Shopify 这类公司。当然，Kafka 同时还有许多商业补充项目。
 
-Kafka 知识也广为人知，因此很容易找到有关 Kafka 问题的答案。有很多博客文章、在线课程、超过 15,000 条 StackOverflow 问题、超过 500 位 GitHub 贡献者，以及有大量使用 Kafka 经验丰富的专家。
+Kafka 知识也广为人知，因此很容易找到有关 Kafka 问题的答案。有很多博客文章、在线课程、超过 15,000 条 StackOverflow 问题、超过 500 位 GitHub 贡献者，以及有大量 Kafka 经验丰富的专家。
 
-Clearly, Pulsar cannot hope to have matched the size of the Kafka ecosystem and community in the relatively short time it has been an open source project. However, it did quickly progress from an incubator project in Apache to a top-level project and has shown steady increase in many of its community metrics, such as GitHub contributors and members of its Slack workspace. And although it is relatively small, the Pulsar community is welcoming and active.
+Pulsar 成为开源项目的时间相对要短一些，其生态系统和社区显然还无法与 Kafka 匹敌。然而，Pulsar 从 Apache 孵化项目迅速发展为顶级项目，并且在许多社区指标上都显示出稳步增长，例如 GitHub 贡献者、Slack 工作区成员数等。虽然 Pulsar 社区相对较小，但热情活跃。
 
-显然，Pulsar 
+尽管如此，Kafka 在社区和相关项目上还是具有明显优势。
 
-Despite all that, Kafka has a clear advantage in this category.
 
-## Open Source
 
-Both Kafka and Pulsar are open source projects run by the ASF. There has been a lot of discussion recently about open source licensing. Some providers of open source software have modified their licenses to prevent the cloud providers from using their open source projects in some applications. This practice highlights an important difference between open source projects.
+## 开源
 
-Some open source projects are controlled by commercial vendors and some are controlled by software foundations, like the ASF. Open source projects are free to change their software license. Today they may be using a permissive license like Apache 2.0 or MIT, but tomorrow they could move to a more restrictive licensing scheme. If you are using an open source project controlled by a commercial vendor, you run the risk of that vendor changing the license for reasons specific to their business. If that occurs and you are using the software in a way that violates the new license and you want to be able to pick up new updates (for example, security patches), you will have to find a friendly fork of the project, take on maintenance of your own fork, or perhaps pay the commercial vendor for a license.
+Kafka 与 Pulsar 都是 ASF 开源项目。最近有很多关于开源许可证的讨论，一些开源软件供应商已经修改了他们的许可证，以防止云提供商在某些应用里使用他们的开源项目。这种做法是开源项目之间的一个重要区别。
 
-Open source projects controlled by software foundations are very unlikely to change their licensing. The widely used Apache 2.0 license has been around since 2004. And if a software foundation did change the license of their open source projects, it is unlikely that they will make them more restrictive, since most foundations have a mandate to provide software free of charge and free of restrictions.
+一些开源项目由商业公司控制，另一些由软件基金会控制，例如 ASF。开源项目可以自由更改其软件许可证。今天他们可能会使用像 Apache 2.0 或 MIT 这样的宽松许可证，但明天就可能转向使用更加严格的许可方案。如果你正在使用由商业公司控制的开源项目，那么可能要面对该公司出于特定商业原因更改许可证的风险。如果发生这种情况，并且你的使用方式违反了新的许可，而你又想继续获得新的更新（例如安全补丁），那么你就需要找到一个友好的项目分支，或者自己维护一个分支，或者向商业公司支付许可证费用。
 
-When evaluating open source software, this distinction is something to keep in mind. Kafka is an open source project under Apache. However, many of the components that are part of the Kafka ecosystem are open source, but not under Apache control, such as:
+由软件基金会控制的开源项目不太可能更改许可。使用广泛的 Apache 2.0 许可自 2004 年就已存在。即便软件基金会确实要更改其开源项目的许可证，也不太可能改成更严格，因为大多数基金会都有授权以免费提供软件且不受限制。
 
-- All client libraries except Java
-- Various connectors for integrating with third-party systems
-- Monitoring and dashboard tools
-- Schema registry
+当评估开源软件时，必须牢记这一区别。Kafka 是 Apache 下的一个开源项目，然而 Kafka 生态中的许多组件虽然是开源的，但并不受 Apache 控制，例如：
+
+- 除 Java 外的所有客户端库
+- 各种用于与第三方系统集成的连接器
+- 监控和仪表盘工具
+- 模式注册表
 - Kafka SQL
 
-The Apache Pulsar open source project has a wider range of its ecosystem within the project. It includes Java, Python, Go, and C++ clients as part of the main project. There are several connectors as part of the Pulsar IO package, such as Aerospike, Apache Cassandra, and AWS Kinesis. Pulsar comes with a schema registry and an SQL-based mechanism for querying topics called Pulsar SQL. It includes a dashboard application as well as Prometheus-based metrics and alerting capabilities.
+Apache Pulsar 开源项目将更广泛的生态系统包含在项目之中。它将 Java、Python、Go 以及 C++ 客户端包含在主项目之中。许多连接器也是 Pulsar IO 包的一部分，例如 Aerospike、Apache Cassandra 以及 AWS Kinesis。Pulsar 自带模式注册表以及名为 Pulsar SQL 的基于 SQL 的主题查询机制。还包含一个仪表盘应用程序以及基于 Prometheus 的指标和告警功能。
 
-Because all of these components are in the main Pulsar project under Apache stewardship, their licensing is unlikely to become more restrictive. Also, as long as the project as a whole is being actively maintained, these components are also being maintained. Tests are regularly run against these components and incompatibilities are fixed before a new Pulsar version is released.
+由于所有这些组件都在 Pulsar 主项目中，并受 Apache 管理，其许可证不太可能变得更加严格。此外，只要项目整体得到积极维护，这些组件也会得到维护。对这些组件会定期进行测试，并在发布 Puslar 新版本之前修复不兼容型。
 
-# Summary
+# 总结
 
 Apache Pulsar has been gaining momentum as an alternative to Apache Kafka. In this report, we compared Kafka and Pulsar in various dimensions, which are summarized in [Table 1].
 
-| Dimension                          | Kafka                                       | Pulsar                               |
-| :--------------------------------- | :------------------------------------------ | :----------------------------------- |
-| Architectural components           | ZooKeeper, Kafka broker                     | ZooKeeper, Pulsar broker, BookKeeper |
-| Replication model                  | Leader–follower                             | Quorum-vote                          |
-| High-performance pub–sub messaging | Supported                                   | Supported                            |
-| Message replay                     | Supported                                   | Supported                            |
-| Competing consumers                | Supported with limitations                  | Supported                            |
-| Traditional consuming patterns     | Not supported                               | Supported                            |
-| Log abstraction                    | Single node                                 | Distributed                          |
-| Tiered storage                     | Not supported                               | Supported                            |
-| Partitions                         | Required                                    | Optional                             |
-| Performance                        | High                                        | Higher                               |
-| Geo-replication                    | Available through tool or external projects | Built-in                             |
-| Community and related projects     | Large and mature                            | Small and growing                    |
-| Open source                        | Mixture of ASF and others                   | All ASF                              |
+作为 Apache Kafka 替代品，Apache Pulsar 发展势头正劲。在本文中，我们从多个维度对比了 Kafka 和 Pulsar，总结如 [表 1]。
 
-We compared the architecture of both systems and their differing replication models. Both systems use Apache ZooKeeper and a broker, but Pulsar splits the broker into two layers: a message serving layer and a message storage layer. Pulsar uses the Apache BookKeeper project for its storage layer. This separation of serving and storing, as well as the horizontal scalability of Apache BookKeeper, makes it natural to run in cloud native environments like Kubernetes.
+| 对比维度                | Kafka                    | Pulsar                               |
+| :---------------------- | :----------------------- | :----------------------------------- |
+| 架构组件                | ZooKeeper、Kafka broker  | ZooKeeper、Pulsar broker、BookKeeper |
+| 复制模型                | Leader–follower          | Quorum-vote                          |
+| 高性能 pub-sub 消息系统 | 支持                     | 支持                                 |
+| 消息重放                | 支持                     | 支持                                 |
+| 竞争消费者              | 有限支持                 | 支持                                 |
+| 传统消费模式            | 不支持                   | 支持                                 |
+| 日志抽象                | 单节点                   | 分布式                               |
+| 多级存储                | 不支持                   | 支持                                 |
+| 分区                    | 必选                     | 可选                                 |
+| 性能                    | 高                       | 更高                                 |
+| 跨地域复制              | 由额外工具或外部系统实现 | 内置支持                             |
+| 社区及相关项目          | 大而成熟                 | 小而成长                             |
+| 开源                    | ASF 与其他混合           | 纯 ASF                               |
 
-Both Kafka and Pulsar use message replication for durability. Kafka uses a leader–follower replication model, and Pulsar uses a quorum–vote replication model.
 
-We looked at the messaging patterns supported by both Kafka and Pulsar, as well as the messaging patterns of traditional message brokers such as RabbitMQ that only Pulsar is able to support. Because Pulsar supports the pub–sub, streaming messaging patterns and the queue-based patterns of traditional message brokers, in organizations that run parallel Kafka and RabbitMQ messaging systems, it is possible to consolidate those systems into a single Pulsar messaging system. For organizations looking to deploy a new messaging system for either streaming or traditional queuing, using Pulsar will future proof your infrastructure in the event that requirements to support new messaging patterns arise.
 
-Both Kafka and Pulsar are built on the log abstraction, where messages are appended to an immutable log. With Kafka, the log is bound to the broker node, but with Pulsar, the log is distributed between the bookie nodes.
+我们对比了这两个系统的架构以及不同的复制模型。二者都使用 Apache ZooKeeper 以及 Broker，但 Pulsar 将 Broker 分为两层：消息计算层以及消息存储层。Pulsar 使用 Apache BookKeeper 作为其存储层。这种计算和存储分离的架构，以及 Apache BookKeeper 本身的水平扩展性，使得在 Kebernetes 等云原生环境中运行 Pulsar 变得自然而然。
 
-Partitions are a fundamental concept in Kafka, but an optional one for Pulsar. This means that Pulsar can provide a degree of simplification over Kafka operationally and when dealing with the client APIs.
+Kafka 和 Pulsar 都使用消息复制来实现持久性。Kafka 使用 leader-follower 复制模型，而 Pulsar 使用 quorum-vote 复制模型。
 
-Pulsar offers features such as tiered storage, built-in geo-replication, and multitenancy that are not available on Kafka. Reports suggest that Pulsar has a performance advantage over Kafka in both latency and throughput. The vast majority of Pulsar’s open source components are controlled by the ASF, not a commercial entity.
+我们分析了 Kafka 和 Pulsar 都能支持的消息模式，以及只有 Pulsar 能支持的传统消息系统（例如 RabbitMQ）的消息模式。由于 Pulsar 支持 pub-sub、流式消息模式、以及传统消息系统的基于队列的模式，因此在同时运行 Kafka 和 RabbitMQ 的组织中，可以将这些系统整合为单个 Pulsar 消息系统。如果企业想要为流式系统或传统队列部署一套消息系统，那么可以选用 Pulsar，将来如果要支持新消息模式也能完美适配。
 
-Although Pulsar cannot match the Kafka ecosystem and community, it has the edge over Kafka in many dimensions. Given these advantages, it is not surprising that Pulsar is gaining momentum as an alternative to Kafka. It can also be expected to continue to gain ground once more people become aware of its advantages.
+Kafka 与 Pulsar 都建立在日志抽象之上，消息被附加到不可变日志中。在 Kafka 中，日志与 Broker 节点绑定；而在 Puslar 中，日志分布在多个 Bookie 节点中。
 
-# Acknowledgments
+分区是 Kafka 中的基础概念，但对 Pulsar 来说是可选的。这意味着 Pulsar 在处理客户端 API 以及运维上比 Kafka 更简单。
 
-I would like to thank Sijie Guo for his technical review, Jeff Bleiel for his insights and patience, and Jess Haberman for her enthusiasm and support.
+Pulsar 提供 Kafka 所不具备的功能，例如多级存储、内置跨地域复制、多租户等。报告表明 Pulsar 在延迟和吞吐量方面都比 Kafka 具有性能优势。Pulsar 绝大多数开源组件都由 ASF 控制，而不受商业公司控制。
+
+虽然 Pulsar 的生态和社区尚不能与 Kafka 匹敌，但它很多方面比 Kafka 更有优势。鉴于这些优势，Pulsar 作为 Kafka 替代品如此势头强劲就不足为奇了。一旦更多的人意识到它的优势，Pulsar 有望继续取得发展。
+
+
+
+# 致谢
+
+感谢 Sijie Guo 给予的技术评审，感谢 Jeff Bleiel 的洞察及耐心，感谢 Jess Haberman 的热情和支持。
